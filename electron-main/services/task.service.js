@@ -25,6 +25,24 @@ function mapTask(row) {
   }
 }
 
+function todayLocal() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function addDaysLocal(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + days)
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
 function list(filters = {}) {
   const db = getConnection()
   const clauses = []
@@ -41,6 +59,35 @@ function list(filters = {}) {
   if (filters.priority) {
     clauses.push('t.priority = @priority')
     params.priority = filters.priority
+  }
+  if (filters.tag) {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM task_tags tt2
+      JOIN tags g2 ON g2.id = tt2.tag_id
+      WHERE tt2.task_id = t.id AND g2.name = @tag COLLATE NOCASE
+    )`)
+    params.tag = String(filters.tag).trim()
+  }
+
+  const today = todayLocal()
+  if (filters.due === 'overdue') {
+    clauses.push(
+      `t.due_date IS NOT NULL AND t.due_date < @today AND t.status NOT IN ('done', 'cancelled')`
+    )
+    params.today = today
+  } else if (filters.due === 'today') {
+    clauses.push('t.due_date = @today')
+    params.today = today
+  } else if (filters.due === 'upcoming') {
+    clauses.push(
+      `t.due_date IS NOT NULL AND t.due_date > @today AND t.due_date <= @until AND t.status NOT IN ('done', 'cancelled')`
+    )
+    params.today = today
+    params.until = addDaysLocal(today, 2)
+  } else if (filters.due === 'set') {
+    clauses.push('t.due_date IS NOT NULL')
+  } else if (filters.due === 'none') {
+    clauses.push('t.due_date IS NULL')
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''

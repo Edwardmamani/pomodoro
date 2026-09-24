@@ -27,19 +27,22 @@
         </div>
       </div>
 
-      <!-- Buscador de tareas -->
-      <div v-if="!editingTaskId" class="relative w-full">
-        <span
-          class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline"
-          >search</span
-        >
-        <input
-          v-model="tasks.query"
-          class="w-full h-9 pl-9 pr-3 rounded-lg bg-surface-container text-on-surface font-body-sm placeholder:text-outline focus:outline-none focus:bg-surface-container-high transition-colors"
-          placeholder="Buscar tareas..."
-          type="text"
-          @input="onSearch"
-        />
+      <!-- Buscador y filtros -->
+      <div v-if="!editingTaskId" class="flex items-center gap-2 w-full">
+        <div class="relative flex-1 min-w-0">
+          <span
+            class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline"
+            >search</span
+          >
+          <input
+            v-model="tasks.query"
+            class="w-full h-9 pl-9 pr-3 rounded-lg bg-surface-container text-on-surface font-body-sm placeholder:text-outline focus:outline-none focus:bg-surface-container-high transition-colors"
+            placeholder="Buscar tareas..."
+            type="text"
+            @input="onSearch"
+          />
+        </div>
+        <TaskFilterMenu />
       </div>
     </div>
 
@@ -57,11 +60,18 @@
         >
           <span
             class="font-label-mono-sm uppercase tracking-wider text-outline"
-            >Tareas Abiertas</span
+            >{{
+              tasks.filters.status === 'cancelled'
+                ? 'Canceladas'
+                : 'Tareas Abiertas'
+            }}</span
           >
           <span
             class="font-label-mono-sm px-1.5 py-0.2 rounded-full bg-surface-container-high text-primary"
-            >{{ tasks.openTasks.length }} abiertas</span
+            >{{ tasks.openTasks.length }}
+            {{
+              tasks.filters.status === 'cancelled' ? 'cancelada' : 'abierta'
+            }}{{ tasks.openTasks.length === 1 ? '' : 's' }}</span
           >
         </div>
 
@@ -219,6 +229,7 @@ import { useTasksStore } from '../stores/tasks.store'
 import TaskFormModal from './TaskFormModal.vue'
 import TaskStatusMenu from './TaskStatusMenu.vue'
 import TaskEditPanel from './TaskEditPanel.vue'
+import TaskFilterMenu from './TaskFilterMenu.vue'
 
 const tasks = useTasksStore()
 const showForm = ref(false)
