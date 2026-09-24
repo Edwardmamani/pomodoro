@@ -1,4 +1,4 @@
-const { BrowserWindow, shell } = require('electron')
+const { BrowserWindow } = require('electron')
 const { getConnection } = require('../db/connection')
 const settingsService = require('./settings.service')
 const taskService = require('./task.service')
@@ -14,6 +14,10 @@ let state = {
   durationMs: 25 * 60 * 1000,
   endsAt: null,
   startedAt: null,
+  /** Tarea a la que se atribuye el tramo actual de focus. */
+  bindingTaskId: null,
+  /** Ms ya persistidos en accumulated_ms durante este periodo (tras cambios de tarea). */
+  creditedMs: 0,
   sessionInCycle: 0,
   completedFocusToday: 0,
   completedShortBreakToday: 0,
@@ -36,16 +40,93 @@ function durationFor(periodType) {
   return s.focus_minutes * 60 * 1000
 }
 
-function getState() {
-  let remainingMs = state.remainingMs
+function currentRemainingMs() {
   if (state.status === 'running' && state.endsAt) {
-    remainingMs = Math.max(0, state.endsAt - Date.now())
+    return Math.max(0, state.endsAt - Date.now())
   }
+  return state.remainingMs
+}
+
+function currentElapsedMs() {
+  if (state.status !== 'running' && state.status !== 'paused') return 0
+  return Math.max(0, state.durationMs - currentRemainingMs())
+}
+
+function clearAttribution() {
+  state.bindingTaskId = null
+  state.creditedMs = 0
+}
+
+function addAccumulatedMs(taskId, ms, atIso) {
+  if (!taskId || ms <= 0) return
+  const db = getConnection()
+  db.prepare(
+    `
+    UPDATE tasks SET
+      accumulated_ms = accumulated_ms + ?,
+      updated_at = ?
+    WHERE id = ?
+  `
+  ).run(ms, atIso || new Date().toISOString(), taskId)
+}
+
+/**
+ * Persiste el tramo aún no acreditado a la tarea vinculada al segmento actual.
+ * @returns {number} ms acreditados en esta llamada
+ */
+function flushUncreditedSegment() {
+  if (state.periodType !== 'focus') return 0
+  if (state.status !== 'running' && state.status !== 'paused') return 0
+
+  const elapsed = currentElapsedMs()
+  const uncredited = Math.max(0, elapsed - state.creditedMs)
+  if (uncredited > 0 && state.bindingTaskId) {
+    addAccumulatedMs(state.bindingTaskId, uncredited)
+    state.creditedMs = elapsed
+    taskService.emitChanged()
+  } else {
+    state.creditedMs = elapsed
+  }
+  return uncredited
+}
+
+/**
+ * Al cambiar la tarea activa durante un focus: acredita el tiempo al anterior
+ * y empieza un nuevo tramo en la nueva tarea.
+ */
+function onActiveTaskChanged(newTaskId) {
+  const nextId = newTaskId ? Number(newTaskId) : null
+  if (
+    state.periodType === 'focus' &&
+    (state.status === 'running' || state.status === 'paused')
+  ) {
+    if (nextId === state.bindingTaskId) return
+    flushUncreditedSegment()
+    state.bindingTaskId = nextId
+    broadcast()
+  } else if (state.status === 'idle') {
+    state.bindingTaskId = nextId
+  }
+}
+
+function getState() {
+  const remainingMs = currentRemainingMs()
   const progress =
     state.durationMs > 0 ? 1 - remainingMs / state.durationMs : 0
+  const elapsedMs =
+    state.status === 'running' || state.status === 'paused'
+      ? Math.max(0, state.durationMs - remainingMs)
+      : 0
+  const segmentElapsedMs =
+    state.periodType === 'focus' &&
+    (state.status === 'running' || state.status === 'paused')
+      ? Math.max(0, elapsedMs - state.creditedMs)
+      : 0
   return {
     ...state,
     remainingMs,
+    elapsedMs,
+    segmentElapsedMs,
     progress,
     strokeDashoffset: CIRCUMFERENCE * (1 - progress),
     circumference: CIRCUMFERENCE,
@@ -97,9 +178,11 @@ function setMode(periodType, opts = {}) {
   }
 
   // Cancelar tick; no llamar a completePeriod → no se guarda como completado
+  // Tampoco se hace flush: el tramo no acreditado se descarta (reset/cambio forzado).
   stopTick()
 
   const durationMs = durationFor(periodType)
+  const settings = settingsService.getAll()
   state = {
     ...state,
     status: 'idle',
@@ -107,7 +190,10 @@ function setMode(periodType, opts = {}) {
     remainingMs: durationMs,
     durationMs,
     endsAt: null,
-    startedAt: null
+    startedAt: null,
+    bindingTaskId:
+      periodType === 'focus' ? settings.active_task_id || null : null,
+    creditedMs: 0
   }
   broadcast()
   return { ok: true, data: getState() }
@@ -132,9 +218,13 @@ function start(opts = {}) {
     taskService.setActive(opts.taskId)
   }
 
+  const settings = settingsService.getAll()
   state.status = 'running'
   state.startedAt = new Date().toISOString()
   state.endsAt = Date.now() + state.remainingMs
+  state.creditedMs = 0
+  state.bindingTaskId =
+    state.periodType === 'focus' ? settings.active_task_id || null : null
   startTick()
   broadcast()
   return { ok: true, data: getState() }
@@ -165,14 +255,19 @@ function resume() {
 
 function reset() {
   stopTick()
+  // Descarta el tramo no acreditado; lo ya flusheado a otras tareas permanece.
   const durationMs = durationFor(state.periodType)
+  const settings = settingsService.getAll()
   state = {
     ...state,
     status: 'idle',
     remainingMs: durationMs,
     durationMs,
     endsAt: null,
-    startedAt: null
+    startedAt: null,
+    bindingTaskId:
+      state.periodType === 'focus' ? settings.active_task_id || null : null,
+    creditedMs: 0
   }
   broadcast()
   return { ok: true, data: getState() }
@@ -190,7 +285,13 @@ function completePeriod() {
   const periodType = state.periodType
   const settings = settingsService.getAll()
   const taskId =
-    periodType === 'focus' ? settings.active_task_id : null
+    periodType === 'focus'
+      ? state.bindingTaskId || settings.active_task_id
+      : null
+  const uncredited =
+    periodType === 'focus'
+      ? Math.max(0, durationMs - state.creditedMs)
+      : 0
 
   const db = getConnection()
   const tx = db.transaction(() => {
@@ -211,7 +312,7 @@ function completePeriod() {
           updated_at = ?
         WHERE id = ?
       `
-      ).run(durationMs, endedAt, taskId)
+      ).run(uncredited, endedAt, taskId)
     }
   })
   tx()
@@ -249,7 +350,10 @@ function completePeriod() {
     remainingMs: nextDuration,
     durationMs: nextDuration,
     endsAt: null,
-    startedAt: null
+    startedAt: null,
+    bindingTaskId:
+      nextType === 'focus' ? settings.active_task_id || null : null,
+    creditedMs: 0
   }
   broadcast()
 }
@@ -293,8 +397,11 @@ function init() {
   state.durationMs = durationMs
   state.periodType = 'focus'
   state.status = 'idle'
+  clearAttribution()
   try {
     loadCompletedCountsToday()
+    const settings = settingsService.getAll()
+    state.bindingTaskId = settings.active_task_id || null
   } catch {
     // BD aún no disponible en smoke/tests tempranos
   }
@@ -310,5 +417,6 @@ module.exports = {
   reset,
   stop,
   syncDurationsFromSettings,
+  onActiveTaskChanged,
   CIRCUMFERENCE
 }

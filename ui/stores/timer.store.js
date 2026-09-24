@@ -7,6 +7,10 @@ export const useTimerStore = defineStore('timer', () => {
     periodType: 'focus',
     remainingMs: 25 * 60 * 1000,
     durationMs: 25 * 60 * 1000,
+    elapsedMs: 0,
+    segmentElapsedMs: 0,
+    bindingTaskId: null,
+    creditedMs: 0,
     display: '25:00',
     progress: 0,
     strokeDashoffset: 867,
@@ -21,6 +25,18 @@ export const useTimerStore = defineStore('timer', () => {
 
   const isRunning = computed(() => state.value.status === 'running')
   const isPaused = computed(() => state.value.status === 'paused')
+
+  /** Ms del tramo actual de focus aún no persistidos (tarea bindingTaskId). */
+  const segmentElapsedMs = computed(() => {
+    if (state.value.periodType !== 'focus') return 0
+    if (state.value.status !== 'running' && state.value.status !== 'paused') {
+      return 0
+    }
+    return Math.max(0, state.value.segmentElapsedMs || 0)
+  })
+
+  /** @deprecated usar segmentElapsedMs; se mantiene por compatibilidad */
+  const focusElapsedMs = segmentElapsedMs
 
   async function refresh() {
     const res = await window.pomodoroAPI.timer.get()
@@ -72,6 +88,8 @@ export const useTimerStore = defineStore('timer', () => {
     state,
     isRunning,
     isPaused,
+    focusElapsedMs,
+    segmentElapsedMs,
     refresh,
     subscribe,
     start,

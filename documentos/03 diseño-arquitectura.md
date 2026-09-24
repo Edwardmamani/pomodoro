@@ -265,6 +265,21 @@ El temporizador **no** debe depender solo de `setInterval` en el renderer (throt
 
 **Enfoque elegido:** en `TimerService` (main) se guarda `endsAt` (epoch ms). Un intervalo en main (~250–1000 ms) calcula `remaining = endsAt - now` y publica actualizaciones. Al pausar se guarda `remainingMs` y se limpia `endsAt`. Al reanudar se recalcula `endsAt`.
 
+### 6.1 Tiempo acumulado de la tarea en curso
+
+En periodos `focus` con tarea vinculada, el tick no solo reduce el cronómetro: también alimenta el **tiempo acumulado visible** de esa tarea. La atribución es por **tramos** (`bindingTaskId`): si el usuario cambia la tarea en curso a mitad del periodo, el tiempo ya transcurrido se acredita a la tarea anterior y el nuevo tramo empieza a sumar en la nueva.
+
+| Momento | Comportamiento |
+| ------- | -------------- |
+| **Start** | Se fija `bindingTaskId` = tarea activa; `creditedMs = 0`. |
+| **Tick (running)** | `remainingMs` baja; `segmentElapsedMs = elapsedMs - creditedMs` sube. La UI muestra `accumulated_ms` + `segmentElapsedMs` solo en `bindingTaskId`. |
+| **Cambio de tarea en curso** | Se hace flush: `accumulated_ms += segmentElapsedMs` en la tarea anterior; `creditedMs = elapsedMs`; `bindingTaskId` pasa a la nueva. |
+| **Pausa** | Se conserva el tramo en la vista; el acumulado mostrado no retrocede. |
+| **Completar periodo** | Se persiste el tramo restante (`durationMs - creditedMs`) en la tarea actual + `completed_pomodoros += 1` + sesión. |
+| **Reset / stop / cambio de modo forzado** | Se descarta el tramo no acreditado; lo ya flusheado a tareas anteriores permanece. |
+
+Así el usuario ve el acumulado **crecer en vivo** mientras el cronómetro decrece, sin “llevarse” el tiempo de la tarea anterior al cambiar de tarea en curso.
+
 ```mermaid
 sequenceDiagram
   participant UI as Renderer
@@ -275,16 +290,20 @@ sequenceDiagram
 
   UI->>API: pomodoro:timer:start
   API->>T: start
-  T->>T: set endsAt
+  T->>T: bindingTaskId=A creditedMs=0
   loop cada tick
-    T-->>UI: pomodoro:timer:state remainingMs
+    T-->>UI: remainingMs + segmentElapsedMs
+    Note over UI: tarea A muestra accumulated + segment
   end
+  UI->>API: cambiar tarea en curso a B
+  API->>T: onActiveTaskChanged B
+  T->>DB: flush segment a tarea A
+  T->>T: bindingTaskId=B
   T->>T: remaining llega a 0
-  T->>DB: insert session + update task
+  T->>DB: insert session + flush resto a B
   T->>N: notify and sound
   T-->>UI: pomodoro:timer:state completed
 ```
-
 
 
 ## 7. IPC (contrato de alto nivel)

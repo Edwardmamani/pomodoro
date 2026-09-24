@@ -140,7 +140,12 @@
                 pomos</span
               >
               <span>·</span>
-              <span>{{ formatMinutes(task.accumulated_ms) }}</span>
+              <span
+                :class="
+                  task.id === tasks.activeTaskId ? 'text-primary' : ''
+                "
+                >{{ formatAccumulated(liveAccumulated(task)) }}</span
+              >
             </div>
           </div>
         </button>
@@ -188,7 +193,12 @@
               <span v-if="task.due_date">·</span>
               <span v-if="task.due_date">{{ formatDueDate(task.due_date) }}</span>
               <span>·</span>
-              <span>{{ formatMinutes(task.accumulated_ms) }}</span>
+              <span
+                :class="
+                  task.id === tasks.activeTaskId ? 'text-primary' : ''
+                "
+                >{{ formatAccumulated(liveAccumulated(task)) }}</span
+              >
             </div>
           </div>
         </button>
@@ -226,12 +236,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useTasksStore } from '../stores/tasks.store'
+import { useTimerStore } from '../stores/timer.store'
 import TaskFormModal from './TaskFormModal.vue'
 import TaskStatusMenu from './TaskStatusMenu.vue'
 import TaskEditPanel from './TaskEditPanel.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
 
 const tasks = useTasksStore()
+const timer = useTimerStore()
 const showForm = ref(false)
 const editingTaskId = ref(null)
 
@@ -241,6 +253,14 @@ const progressPct = computed(() => {
   if (!tasks.totalCount) return 0
   return Math.round((tasks.completedCount / tasks.totalCount) * 100)
 })
+
+function liveAccumulated(task) {
+  if (!task) return 0
+  const base = task.accumulated_ms || 0
+  const bindingId = timer.state.bindingTaskId
+  if (bindingId == null || Number(task.id) !== Number(bindingId)) return base
+  return base + timer.segmentElapsedMs
+}
 
 function openEdit(id) {
   editingTaskId.value = id
@@ -263,9 +283,13 @@ function priorityClass(p) {
   return 'bg-surface-container-highest text-outline'
 }
 
-function formatMinutes(ms) {
-  const m = Math.round((ms || 0) / 60000)
-  return `${m}m`
+function formatAccumulated(ms) {
+  const totalSec = Math.floor((ms || 0) / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  if (m === 0) return `${s}s`
+  if (s === 0) return `${m}m`
+  return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 function todayLocal() {

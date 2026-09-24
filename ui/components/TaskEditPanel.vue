@@ -195,7 +195,7 @@
         </span>
         <span class="inline-flex items-center gap-1">
           <span class="material-symbols-outlined text-[14px]">schedule</span>
-          {{ formatMinutes(task.accumulated_ms) }} acumulados
+          {{ formatAccumulated(liveAccumulated) }} acumulados
         </span>
       </div>
 
@@ -244,6 +244,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useTasksStore } from '../stores/tasks.store'
+import { useTimerStore } from '../stores/timer.store'
 import { suggestTags } from '../lib/levenshtein'
 import { tagDotColor } from '../lib/tag-color'
 import TaskStatusMenu from './TaskStatusMenu.vue'
@@ -256,6 +257,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved', 'deleted'])
 
 const tasks = useTasksStore()
+const timer = useTimerStore()
 const titleInput = ref(null)
 const tagInput = ref(null)
 const submitting = ref(false)
@@ -277,6 +279,15 @@ const form = reactive({
 const task = computed(
   () => tasks.tasks.find((t) => t.id === props.taskId) || null
 )
+
+const liveAccumulated = computed(() => {
+  const t = task.value
+  if (!t) return 0
+  const base = t.accumulated_ms || 0
+  const bindingId = timer.state.bindingTaskId
+  if (bindingId == null || Number(t.id) !== Number(bindingId)) return base
+  return base + timer.segmentElapsedMs
+})
 
 const suggestions = computed(() =>
   suggestTags(tagQuery.value, knownTags.value, {
@@ -330,9 +341,13 @@ function loadFromTask(t) {
   }
 }
 
-function formatMinutes(ms) {
-  const m = Math.round((ms || 0) / 60000)
-  return `${m}m`
+function formatAccumulated(ms) {
+  const totalSec = Math.floor((ms || 0) / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  if (m === 0) return `${s}s`
+  if (s === 0) return `${m}m`
+  return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 function focusTagInput() {

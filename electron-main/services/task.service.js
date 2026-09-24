@@ -256,6 +256,7 @@ function update(id, input) {
 
   if (status === 'in_progress') {
     settingsService.setMany({ active_task_id: id })
+    notifyTimerActiveChanged(id)
   }
 
   emitChanged()
@@ -287,6 +288,7 @@ function setActive(id) {
   })
   tx()
   settingsService.setMany({ active_task_id: id })
+  notifyTimerActiveChanged(id)
   emitChanged()
   return { ok: true, data: getById(id) }
 }
@@ -298,9 +300,18 @@ function remove(id) {
   const settings = settingsService.getAll()
   if (settings.active_task_id === id) {
     settingsService.setMany({ active_task_id: '' })
+    notifyTimerActiveChanged(null)
   }
   emitChanged()
   return { ok: true }
+}
+
+function notifyTimerActiveChanged(taskId) {
+  // Lazy require: evita dependencia circular en el arranque del módulo.
+  const timerService = require('./timer.service')
+  if (typeof timerService.onActiveTaskChanged === 'function') {
+    timerService.onActiveTaskChanged(taskId)
+  }
 }
 
 function emitChanged() {

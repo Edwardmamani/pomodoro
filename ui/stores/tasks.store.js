@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useTimerStore } from './timer.store'
 
 function emptyFilters() {
   return {
@@ -112,6 +113,19 @@ export const useTasksStore = defineStore('tasks', () => {
     })
   }
 
+  /**
+   * Tiempo acumulado visible: persistido + tramo de focus aún no flusheado
+   * de la tarea vinculada al segmento actual (bindingTaskId).
+   */
+  function displayAccumulatedMs(task) {
+    if (!task) return 0
+    const base = task.accumulated_ms || 0
+    const timer = useTimerStore()
+    const bindingId = timer.state.bindingTaskId
+    if (bindingId == null || Number(task.id) !== Number(bindingId)) return base
+    return base + (timer.segmentElapsedMs || 0)
+  }
+
   return {
     tasks,
     query,
@@ -124,6 +138,7 @@ export const useTasksStore = defineStore('tasks', () => {
     totalCount,
     activeFilterCount,
     hasActiveFilters,
+    displayAccumulatedMs,
     refresh,
     setFilter,
     clearFilters,
