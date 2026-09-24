@@ -1,0 +1,43 @@
+{
+  "name": "pomodoro-serene-focus",
+  "version": "0.1.0",
+  "description": "Aplicación Pomodoro de escritorio con Electron, Vue y SQLite",
+  "main": "electron-main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && ELECTRON_DEV=1 electron .\"",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "mcp": "node mcp/index.js",
+    "smoke": "ELECTRON_RUN_AS_NODE=1 electron scripts/smoke-services.js"
+  },
+  "keywords": ["electron", "vue", "sqlite", "pomodoro"],
+  "author": "Edward-dev",
+  "license": "ISC",
+  "packageManager": "pnpm@12.4.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "@electron/rebuild",
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "concurrently": "^10.0.5",
+    "electron": "^44.3.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.0",
+    "wait-on": "^9.1.0"
+  }
+}
