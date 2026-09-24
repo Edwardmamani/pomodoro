@@ -108,6 +108,14 @@ function ensureTags(db, tagNames = []) {
   return ids
 }
 
+function listTags() {
+  const db = getConnection()
+  const rows = db
+    .prepare('SELECT name FROM tags ORDER BY name COLLATE NOCASE ASC')
+    .all()
+  return rows.map((r) => r.name)
+}
+
 function create(input) {
   const db = getConnection()
   const now = new Date().toISOString()
@@ -259,6 +267,7 @@ function onChanged(listener) {
 
 module.exports = {
   list,
+  listTags,
   getById,
   create,
   update,

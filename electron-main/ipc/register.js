@@ -21,13 +21,14 @@ function registerIpc() {
   ipcMain.handle('pomodoro:timer:resume', () => timerService.resume())
   ipcMain.handle('pomodoro:timer:reset', () => timerService.reset())
   ipcMain.handle('pomodoro:timer:stop', () => timerService.stop())
-  ipcMain.handle('pomodoro:timer:setMode', (_e, periodType) =>
-    timerService.setMode(periodType)
+  ipcMain.handle('pomodoro:timer:setMode', (_e, periodType, opts) =>
+    timerService.setMode(periodType, opts || {})
   )
 
   ipcMain.handle('pomodoro:tasks:list', (_e, filters) =>
     ok(taskService.list(filters || {}))
   )
+  ipcMain.handle('pomodoro:tasks:listTags', () => ok(taskService.listTags()))
   ipcMain.handle('pomodoro:tasks:create', (_e, input) =>
     taskService.create(input || {})
   )

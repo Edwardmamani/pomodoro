@@ -1,8 +1,9 @@
 <template>
   <aside
-    class="col-span-3 bg-surface-container-low p-5 flex flex-col justify-between overflow-y-auto"
+    class="h-full w-full bg-surface-container-low p-5 flex flex-col overflow-hidden"
   >
-    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-4 shrink-0">
+      <!-- Título y progreso de tareas -->
       <div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -26,7 +27,8 @@
         </div>
       </div>
 
-      <div class="relative w-full">
+      <!-- Buscador de tareas -->
+      <div v-if="!editingTaskId" class="relative w-full">
         <span
           class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline"
           >search</span
@@ -39,10 +41,19 @@
           @input="onSearch"
         />
       </div>
+    </div>
 
-      <div class="flex flex-col gap-2 mt-1">
+    <TaskEditPanel
+      v-if="editingTaskId"
+      :task-id="editingTaskId"
+      @close="editingTaskId = null"
+    />
+
+    <template v-else>
+      <div class="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto">
+        <!-- Tareas abiertas -->
         <div
-          class="flex items-center justify-between px-1 pt-1 pb-0.5 text-on-surface-variant"
+          class="flex items-center justify-between px-1 pt-1 pb-0.5 text-on-surface-variant shrink-0"
         >
           <span
             class="font-label-mono-sm uppercase tracking-wider text-outline"
@@ -54,6 +65,7 @@
           >
         </div>
 
+        <!-- Lista de tareas abiertas -->
         <button
           v-for="task in tasks.openTasks"
           :key="task.id"
@@ -64,26 +76,14 @@
               ? 'bg-surface-container-high text-on-surface shadow-sm'
               : 'hover:bg-surface-container'
           "
-          @click="tasks.setActive(task.id)"
+          @click="openEdit(task.id)"
         >
-          <div class="mt-0.5 flex-shrink-0">
-            <div
-              v-if="task.id === tasks.activeTaskId"
-              class="w-4 h-4 rounded-full bg-primary flex items-center justify-center"
-            >
-              <span
-                class="material-symbols-outlined text-[12px] text-on-primary"
-                style="font-variation-settings: 'FILL' 1"
-                >play_arrow</span
-              >
-            </div>
-            <button
-              v-else
-              type="button"
-              class="w-4 h-4 rounded-full bg-surface-container-high group-hover:bg-primary/30 transition-colors"
-              title="Marcar hecha"
-              @click.stop="tasks.markDone(task.id)"
-            ></button>
+          <div class="mt-0.5 flex-shrink-0" @click.stop>
+            <TaskStatusMenu
+              :task-id="task.id"
+              :status="task.status"
+              :accent="task.id === tasks.activeTaskId"
+            />
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-1">
@@ -103,13 +103,22 @@
               >
             </div>
             <div
-              class="flex items-center gap-2 mt-1.5 text-on-surface-variant font-label-mono-sm"
+              class="flex items-center gap-2 mt-1.5 text-on-surface-variant font-label-mono-sm flex-wrap"
             >
               <span
                 v-if="task.tags[0]"
                 class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
                 >{{ task.tags[0] }}</span
               >
+              <span
+                v-if="task.due_date"
+                class="px-1.5 py-0.5 rounded bg-surface-container inline-flex items-center gap-0.5"
+                :class="dueDateClass(task)"
+                :title="'Finaliza ' + task.due_date"
+              >
+                <span class="material-symbols-outlined text-[11px]">event</span>
+                {{ formatDueDate(task.due_date) }}
+              </span>
               <span>·</span>
               <span
                 :class="
@@ -126,8 +135,9 @@
           </div>
         </button>
 
+        <!-- Tareas completadas -->
         <div
-          class="pt-2 mt-1 border-t border-outline-variant/30 flex items-center justify-between px-1"
+          class="pt-2 mt-1 border-t border-outline-variant/30 flex items-center justify-between px-1 shrink-0"
         >
           <span
             class="font-label-mono-sm uppercase tracking-wider text-outline"
@@ -141,15 +151,16 @@
           >
         </div>
 
-        <div
+        <!-- Lista de tareas completadas -->
+        <button
           v-for="task in tasks.doneTasks"
           :key="task.id"
-          class="flex items-start gap-3 p-3 rounded-xl opacity-50 hover:opacity-75 transition-opacity bg-surface-container/40"
+          type="button"
+          class="flex items-start gap-3 p-3 rounded-xl opacity-50 hover:opacity-75 transition-opacity bg-surface-container/40 text-left w-full cursor-pointer"
+          @click="openEdit(task.id)"
         >
-          <div
-            class="mt-0.5 w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 text-primary"
-          >
-            <span class="material-symbols-outlined text-[12px]">check</span>
+          <div class="mt-0.5 flex-shrink-0" @click.stop>
+            <TaskStatusMenu :task-id="task.id" :status="task.status" />
           </div>
           <div class="flex-1 min-w-0">
             <span
@@ -164,78 +175,54 @@
                 class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
                 >{{ task.tags[0] }}</span
               >
+              <span v-if="task.due_date">·</span>
+              <span v-if="task.due_date">{{ formatDueDate(task.due_date) }}</span>
               <span>·</span>
               <span>{{ formatMinutes(task.accumulated_ms) }}</span>
             </div>
           </div>
-        </div>
+        </button>
       </div>
-    </div>
 
-    <div class="pt-4 mt-4 flex items-center gap-2">
-      <button
-        type="button"
-        class="flex-1 h-10 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md flex items-center justify-center gap-2 transition-colors"
-        @click="showAdd = !showAdd"
+      <!-- Botones de añadir tarea y exportar tareas -->
+      <div
+        class="pt-4 mt-auto shrink-0 flex items-center gap-2 bg-surface-container-low"
       >
-        <span class="material-symbols-outlined text-[18px]">add</span>
-        <span>Añadir tarea</span>
-      </button>
-      <button
-        type="button"
-        class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
-        title="Exportar tareas"
-        @click="tasks.exportTasks('json')"
-      >
-        <span class="material-symbols-outlined text-[18px]">file_download</span>
-      </button>
-    </div>
-
-    <form
-      v-if="showAdd"
-      class="mt-3 flex flex-col gap-2"
-      @submit.prevent="onCreate"
-    >
-      <input
-        v-model="newTitle"
-        class="w-full h-9 px-3 rounded-lg bg-surface-container text-on-surface font-body-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-        placeholder="Título de la tarea"
-        required
-      />
-      <div class="flex gap-2">
-        <select
-          v-model="newPriority"
-          class="flex-1 h-9 px-2 rounded-lg bg-surface-container text-on-surface font-body-sm"
+        <button
+          type="button"
+          class="flex-1 h-10 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md flex items-center justify-center gap-2 transition-colors"
+          @click="showForm = true"
         >
-          <option value="high">Alta</option>
-          <option value="medium">Media</option>
-          <option value="low">Baja</option>
-        </select>
-        <input
-          v-model="newTag"
-          class="flex-1 h-9 px-2 rounded-lg bg-surface-container text-on-surface font-body-sm"
-          placeholder="Etiqueta"
-        />
+          <span class="material-symbols-outlined text-[18px]">add</span>
+          <span>Añadir tarea</span>
+        </button>
+        <button
+          type="button"
+          class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
+          title="Exportar tareas"
+          @click="tasks.exportTasks('json')"
+        >
+          <span class="material-symbols-outlined text-[18px]"
+            >file_download</span
+          >
+        </button>
       </div>
-      <button
-        type="submit"
-        class="h-9 rounded-xl bg-primary text-on-primary font-label-md"
-      >
-        Crear
-      </button>
-    </form>
+    </template>
+
+    <TaskFormModal v-model:open="showForm" />
   </aside>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
 import { useTasksStore } from '../stores/tasks.store'
+import TaskFormModal from './TaskFormModal.vue'
+import TaskStatusMenu from './TaskStatusMenu.vue'
+import TaskEditPanel from './TaskEditPanel.vue'
 
 const tasks = useTasksStore()
-const showAdd = ref(false)
-const newTitle = ref('')
-const newPriority = ref('medium')
-const newTag = ref('')
+const showForm = ref(false)
+const editingTaskId = ref(null)
 
 let searchTimer = null
 
@@ -243,6 +230,10 @@ const progressPct = computed(() => {
   if (!tasks.totalCount) return 0
   return Math.round((tasks.completedCount / tasks.totalCount) * 100)
 })
+
+function openEdit(id) {
+  editingTaskId.value = id
+}
 
 function onSearch() {
   clearTimeout(searchTimer)
@@ -266,18 +257,28 @@ function formatMinutes(ms) {
   return `${m}m`
 }
 
-async function onCreate() {
-  const tags = newTag.value.trim() ? [newTag.value.trim()] : []
-  await tasks.create({
-    title: newTitle.value,
-    priority: newPriority.value,
-    tags,
-    estimated_pomodoros: 1,
-    status: 'todo'
-  })
-  newTitle.value = ''
-  newTag.value = ''
-  newPriority.value = 'medium'
-  showAdd.value = false
+function todayLocal() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function formatDueDate(iso) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  if (!y || !m || !d) return iso
+  return `${d}/${m}`
+}
+
+function dueDateClass(task) {
+  if (!task.due_date || ['done', 'cancelled'].includes(task.status)) {
+    return 'text-outline'
+  }
+  const today = todayLocal()
+  if (task.due_date < today) return 'text-error bg-error/10'
+  if (task.due_date === today) return 'text-secondary bg-secondary/10'
+  return 'text-outline'
 }
 </script>

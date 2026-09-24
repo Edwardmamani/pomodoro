@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="col-span-3 bg-surface-container-low p-5 flex flex-col justify-between overflow-y-auto"
+    class="h-full w-full bg-surface-container-low p-5 flex flex-col justify-between overflow-y-auto"
   >
     <div class="flex flex-col gap-5">
       <div

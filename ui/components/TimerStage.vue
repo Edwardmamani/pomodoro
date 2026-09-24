@@ -1,6 +1,6 @@
 <template>
   <main
-    class="col-span-9 bg-surface p-6 overflow-y-auto flex flex-col items-center justify-between border-r border-outline-variant/30"
+    class="h-full w-full bg-surface p-6 overflow-y-auto flex flex-col items-center justify-between"
   >
     <div
       class="inline-flex items-center p-1 bg-surface-container-low rounded-full shadow-sm mt-2"
@@ -40,7 +40,20 @@
         "
         @click="onMode('short_break')"
       >
+        <span
+          v-if="periodType === 'short_break'"
+          class="w-2 h-2 rounded-full bg-primary"
+        ></span>
         <span class="font-label-md">Descanso corto</span>
+        <span
+          class="font-label-mono-sm px-1.5 py-0.5 rounded-full"
+          :class="
+            periodType === 'short_break'
+              ? 'bg-primary/20 text-primary'
+              : 'bg-surface-container-highest text-on-surface-variant'
+          "
+          >{{ timer.state.completedShortBreakToday }}</span
+        >
       </button>
       <button
         type="button"
@@ -52,7 +65,20 @@
         "
         @click="onMode('long_break')"
       >
+        <span
+          v-if="periodType === 'long_break'"
+          class="w-2 h-2 rounded-full bg-primary"
+        ></span>
         <span class="font-label-md">Descanso largo</span>
+        <span
+          class="font-label-mono-sm px-1.5 py-0.5 rounded-full"
+          :class="
+            periodType === 'long_break'
+              ? 'bg-primary/20 text-primary'
+              : 'bg-surface-container-highest text-on-surface-variant'
+          "
+          >{{ timer.state.completedLongBreakToday }}</span
+        >
       </button>
     </div>
 
@@ -184,18 +210,36 @@
         >
       </div>
     </div>
+      <ConfirmModal
+      v-model:open="confirmOpen"
+      title="¿Cambiar de modo?"
+      :message="confirmMessage"
+      confirm-label="Cambiar modo"
+      cancel-label="Seguir así"
+      @confirm="confirmModeChange"
+    />
   </main>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useTimerStore } from '../stores/timer.store'
 import { useTasksStore } from '../stores/tasks.store'
 import { useSettingsStore } from '../stores/settings.store'
+import ConfirmModal from './ConfirmModal.vue'
 
 const timer = useTimerStore()
 const tasks = useTasksStore()
 const settings = useSettingsStore()
+
+const confirmOpen = ref(false)
+const pendingMode = ref(null)
+
+const MODE_LABELS = {
+  focus: 'Concentración',
+  short_break: 'Descanso corto',
+  long_break: 'Descanso largo'
+}
 
 const periodType = computed(() => timer.state.periodType)
 const circumference = computed(() => timer.state.circumference || 867)
@@ -229,7 +273,27 @@ const toggleLabel = computed(() => {
   return 'Iniciar'
 })
 
+const confirmMessage = computed(() => {
+  const next = MODE_LABELS[pendingMode.value] || 'otro modo'
+  const stateLabel = timer.isPaused ? 'en pausa' : 'en marcha'
+  return `El temporizador está ${stateLabel}. Al cambiar a ${next}, el tiempo se restablecerá a la duración de ese modo y el periodo actual no se guardará como completado.`
+})
+
 async function onMode(type) {
+  if (type === periodType.value) return
+  if (timer.isRunning || timer.isPaused) {
+    pendingMode.value = type
+    confirmOpen.value = true
+    return
+  }
   await timer.setMode(type)
+}
+
+async function confirmModeChange() {
+  const type = pendingMode.value
+  pendingMode.value = null
+  if (!type) return
+  // force: cancela sin completar + restablece duración del modo destino
+  await timer.setMode(type, { force: true })
 }
 </script>

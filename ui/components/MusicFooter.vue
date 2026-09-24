@@ -1,6 +1,6 @@
 <template>
   <footer
-    class="col-span-12 bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-10"
+    class="bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-10"
   >
     <div class="flex items-center gap-3.5 min-w-0 w-1/4">
       <button

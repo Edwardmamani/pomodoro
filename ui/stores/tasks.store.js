@@ -39,7 +39,21 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   async function markDone(id) {
-    const res = await window.pomodoroAPI.tasks.update(id, { status: 'done' })
+    return updateStatus(id, 'done')
+  }
+
+  async function updateStatus(id, status) {
+    return update(id, { status })
+  }
+
+  async function update(id, input) {
+    const res = await window.pomodoroAPI.tasks.update(id, input)
+    if (res.ok) await refresh()
+    return res
+  }
+
+  async function remove(id) {
+    const res = await window.pomodoroAPI.tasks.remove(id)
     if (res.ok) await refresh()
     return res
   }
@@ -67,6 +81,9 @@ export const useTasksStore = defineStore('tasks', () => {
     create,
     setActive,
     markDone,
+    updateStatus,
+    update,
+    remove,
     exportTasks,
     subscribe
   }

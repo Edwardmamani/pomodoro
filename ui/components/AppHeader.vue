@@ -1,6 +1,6 @@
 <template>
   <header
-    class="col-span-12 h-16 bg-surface-container-low border-b border-outline-variant/30 px-6 flex items-center justify-between z-10 app-drag"
+    class="h-16 bg-surface-container-low border-b border-outline-variant/30 px-6 flex items-center justify-between z-10 app-drag"
   >
     <div class="flex items-center gap-6 app-no-drag">
       <div class="flex items-center gap-2.5">

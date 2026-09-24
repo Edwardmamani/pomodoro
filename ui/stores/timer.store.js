@@ -12,7 +12,9 @@ export const useTimerStore = defineStore('timer', () => {
     strokeDashoffset: 867,
     circumference: 867,
     sessionInCycle: 0,
-    completedFocusToday: 0
+    completedFocusToday: 0,
+    completedShortBreakToday: 0,
+    completedLongBreakToday: 0
   })
 
   let unsub = null
@@ -52,8 +54,12 @@ export const useTimerStore = defineStore('timer', () => {
     return window.pomodoroAPI.timer.stop()
   }
 
-  async function setMode(periodType) {
-    return window.pomodoroAPI.timer.setMode(periodType)
+  async function setMode(periodType, opts) {
+    const res = await window.pomodoroAPI.timer.setMode(periodType, opts)
+    if (res?.ok && res.data) {
+      state.value = { ...state.value, ...res.data }
+    }
+    return res
   }
 
   async function toggle() {

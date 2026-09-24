@@ -26,7 +26,7 @@
 **Criterios de aceptación**
 
 - **Given** estoy en la pantalla Inicio / Enfoque y el temporizador está detenido,  
-**When** pulso iniciar / reproducir,  
+**When** pulso iniciar,  
 **Then** el tiempo comienza a descontar y se muestra el modo activo (Concentración, Descanso corto o Descanso largo).
 - **Given** el temporizador está en marcha,  
 **When** pulso pausar,  

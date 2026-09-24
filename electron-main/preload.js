@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     resume: () => invoke('pomodoro:timer:resume'),
     reset: () => invoke('pomodoro:timer:reset'),
     stop: () => invoke('pomodoro:timer:stop'),
-    setMode: (periodType) => invoke('pomodoro:timer:setMode', periodType),
+    setMode: (periodType, opts) =>
+      invoke('pomodoro:timer:setMode', periodType, opts),
     onState: (cb) => {
       const handler = (_e, state) => cb(state)
       ipcRenderer.on('pomodoro:timer:state', handler)
@@ -19,6 +20,7 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
   },
   tasks: {
     list: (filters) => invoke('pomodoro:tasks:list', filters),
+    listTags: () => invoke('pomodoro:tasks:listTags'),
     create: (input) => invoke('pomodoro:tasks:create', input),
     update: (id, input) => invoke('pomodoro:tasks:update', id, input),
     setActive: (id) => invoke('pomodoro:tasks:setActive', id),
@@ -46,5 +48,13 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     select: (id) => invoke('pomodoro:music:select', id),
     open: () => invoke('pomodoro:music:open'),
     add: (input) => invoke('pomodoro:music:add', input)
+  },
+  sound: {
+    onPlay: (cb) => {
+      const handler = (_e, payload) => cb(payload)
+      ipcRenderer.on('pomodoro:sound:play', handler)
+      return () =>
+        ipcRenderer.removeListener('pomodoro:sound:play', handler)
+    }
   }
 })

@@ -15,7 +15,9 @@ let state = {
   endsAt: null,
   startedAt: null,
   sessionInCycle: 0,
-  completedFocusToday: 0
+  completedFocusToday: 0,
+  completedShortBreakToday: 0,
+  completedLongBreakToday: 0
 }
 
 let tickTimer = null
@@ -79,10 +81,24 @@ function startTick() {
   }, 500)
 }
 
-function setMode(periodType) {
-  if (state.status === 'running') {
-    return { ok: false, error: 'TIMER_RUNNING' }
+/**
+ * Cambia el modo del periodo.
+ * Con force=true (tras confirmación del usuario): cancela el periodo en curso
+ * o en pausa, NO inserta sesión completada, y restablece remainingMs a la
+ * duración configurada del nuevo modo.
+ */
+function setMode(periodType, opts = {}) {
+  const force = Boolean(opts.force)
+  if (
+    (state.status === 'running' || state.status === 'paused') &&
+    !force
+  ) {
+    return { ok: false, error: 'TIMER_ACTIVE' }
   }
+
+  // Cancelar tick; no llamar a completePeriod → no se guarda como completado
+  stopTick()
+
   const durationMs = durationFor(periodType)
   state = {
     ...state,
@@ -205,6 +221,10 @@ function completePeriod() {
     state.sessionInCycle += 1
     state.completedFocusToday += 1
     taskService.emitChanged()
+  } else if (periodType === 'short_break') {
+    state.completedShortBreakToday += 1
+  } else if (periodType === 'long_break') {
+    state.completedLongBreakToday += 1
   }
 
   notificationService.notifyPeriodComplete(periodType)
@@ -242,12 +262,42 @@ function syncDurationsFromSettings() {
   broadcast()
 }
 
+function loadCompletedCountsToday() {
+  const day = streakService.localDay()
+  const db = getConnection()
+  const rows = db
+    .prepare(
+      `
+      SELECT period_type, COUNT(*) AS n
+      FROM pomodoro_sessions
+      WHERE completed = 1
+        AND date(started_at, 'localtime') = ?
+      GROUP BY period_type
+    `
+    )
+    .all(day)
+
+  const counts = { focus: 0, short_break: 0, long_break: 0 }
+  for (const row of rows) {
+    if (row.period_type in counts) counts[row.period_type] = row.n
+  }
+  state.completedFocusToday = counts.focus
+  state.completedShortBreakToday = counts.short_break
+  state.completedLongBreakToday = counts.long_break
+  state.sessionInCycle = counts.focus % (settingsService.getAll().pomodoros_until_long_break || 4)
+}
+
 function init() {
   const durationMs = durationFor('focus')
   state.remainingMs = durationMs
   state.durationMs = durationMs
   state.periodType = 'focus'
   state.status = 'idle'
+  try {
+    loadCompletedCountsToday()
+  } catch {
+    // BD aún no disponible en smoke/tests tempranos
+  }
 }
 
 module.exports = {
