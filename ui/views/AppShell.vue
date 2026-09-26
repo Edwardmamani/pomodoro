@@ -5,10 +5,12 @@
     <AppHeader :panel="panel" />
 
     <div ref="splitRow" class="min-h-0 flex overflow-hidden">
+      <!-- timer -->
       <div class="min-w-0 min-h-0 flex-1 overflow-hidden">
         <TimerStage />
       </div>
 
+      <!-- splitter -->
       <div
         class="relative w-1.5 flex-shrink-0 cursor-col-resize group z-20"
         role="separator"
@@ -30,6 +32,7 @@
         ></div>
       </div>
 
+      <!-- sidebar -->
       <div
         class="min-h-0 flex-shrink-0 overflow-hidden"
         :style="{ width: `${sidebarWidth}px` }"

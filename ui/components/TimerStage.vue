@@ -2,6 +2,7 @@
   <main
     class="h-full w-full bg-surface p-6 overflow-y-auto flex flex-col items-center justify-between"
   >
+  <!-- Timer modes buttons -->
     <div
       class="inline-flex items-center p-1 bg-surface-container-low rounded-full shadow-sm mt-2"
     >
@@ -82,6 +83,7 @@
       </button>
     </div>
 
+    <!-- Timer circle -->
     <div class="relative flex items-center justify-center my-4">
       <div class="w-[320px] h-[320px] relative flex items-center justify-center">
         <svg class="w-full h-full transform -rotate-90" viewBox="0 0 320 320">
@@ -147,6 +149,7 @@
       </div>
     </div>
 
+    <!-- Timer buttons -->
     <div class="flex items-center gap-4 my-2">
       <button
         type="button"
@@ -178,6 +181,7 @@
       </button>
     </div>
 
+    <!-- Active task -->
     <div
       class="flex items-center justify-between px-5 py-2.5 rounded-full bg-surface-container-low border border-outline-variant/30 text-xs shadow-sm max-w-md w-full mb-2"
     >
@@ -210,7 +214,9 @@
         >
       </div>
     </div>
-      <ConfirmModal
+
+    <!-- Confirm modal -->
+    <ConfirmModal
       v-model:open="confirmOpen"
       title="¿Cambiar de modo?"
       :message="confirmMessage"
@@ -218,6 +224,7 @@
       cancel-label="Seguir así"
       @confirm="confirmModeChange"
     />
+
   </main>
 </template>
 

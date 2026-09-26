@@ -6,6 +6,7 @@ const streakService = require('./streak.service')
 const notificationService = require('./notification.service')
 
 const CIRCUMFERENCE = 2 * Math.PI * 138
+const SNAPSHOT_KEY = 'timer_snapshot'
 
 let state = {
   status: 'idle',
@@ -391,6 +392,105 @@ function loadCompletedCountsToday() {
   state.sessionInCycle = counts.focus % (settingsService.getAll().pomodoros_until_long_break || 4)
 }
 
+function clearSnapshot() {
+  const db = getConnection()
+  db.prepare('DELETE FROM settings WHERE key = ?').run(SNAPSHOT_KEY)
+}
+
+function writeSnapshot() {
+  const db = getConnection()
+  if (state.status === 'idle') {
+    clearSnapshot()
+    return
+  }
+
+  const payload = JSON.stringify({
+    status: state.status,
+    periodType: state.periodType,
+    remainingMs: state.remainingMs,
+    durationMs: state.durationMs,
+    startedAt: state.startedAt,
+    bindingTaskId: state.bindingTaskId,
+    creditedMs: state.creditedMs,
+    sessionInCycle: state.sessionInCycle
+  })
+  db.prepare(
+    `
+    INSERT INTO settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `
+  ).run(SNAPSHOT_KEY, payload)
+}
+
+/**
+ * Restaura un pomodoro en pausa guardado al cerrar la app.
+ * Siempre vuelve como paused (nunca running) para que el usuario reanude a mano.
+ * @returns {boolean}
+ */
+function restoreSnapshot() {
+  const db = getConnection()
+  const row = db
+    .prepare('SELECT value FROM settings WHERE key = ?')
+    .get(SNAPSHOT_KEY)
+  if (!row?.value) return false
+
+  let snap
+  try {
+    snap = JSON.parse(row.value)
+  } catch {
+    clearSnapshot()
+    return false
+  }
+
+  const remainingMs = Math.max(0, Number(snap.remainingMs) || 0)
+  const durationMs = Math.max(remainingMs, Number(snap.durationMs) || 0)
+  const periodType = snap.periodType
+  const validType =
+    periodType === 'focus' ||
+    periodType === 'short_break' ||
+    periodType === 'long_break'
+  const wasActive =
+    snap.status === 'paused' || snap.status === 'running'
+
+  if (!wasActive || !validType || remainingMs <= 0 || durationMs <= 0) {
+    clearSnapshot()
+    return false
+  }
+
+  state = {
+    ...state,
+    status: 'paused',
+    periodType,
+    remainingMs,
+    durationMs,
+    endsAt: null,
+    startedAt: snap.startedAt || null,
+    bindingTaskId:
+      snap.bindingTaskId != null ? Number(snap.bindingTaskId) : null,
+    creditedMs: Math.max(0, Number(snap.creditedMs) || 0),
+    sessionInCycle: Number.isFinite(Number(snap.sessionInCycle))
+      ? Number(snap.sessionInCycle)
+      : state.sessionInCycle
+  }
+  clearSnapshot()
+  return true
+}
+
+/**
+ * Al cerrar la app: pausa si estaba en marcha, acredita el tiempo de la tarea
+ * en curso y persiste el estado del temporizador para restaurarlo al reabrir.
+ */
+function persistForQuit() {
+  if (state.status === 'running') {
+    state.remainingMs = Math.max(0, (state.endsAt || Date.now()) - Date.now())
+    state.endsAt = null
+    state.status = 'paused'
+    stopTick()
+  }
+  flushUncreditedSegment()
+  writeSnapshot()
+}
+
 function init() {
   const durationMs = durationFor('focus')
   state.remainingMs = durationMs
@@ -400,8 +500,11 @@ function init() {
   clearAttribution()
   try {
     loadCompletedCountsToday()
-    const settings = settingsService.getAll()
-    state.bindingTaskId = settings.active_task_id || null
+    const restored = restoreSnapshot()
+    if (!restored) {
+      const settings = settingsService.getAll()
+      state.bindingTaskId = settings.active_task_id || null
+    }
   } catch {
     // BD aún no disponible en smoke/tests tempranos
   }
@@ -418,5 +521,6 @@ module.exports = {
   stop,
   syncDurationsFromSettings,
   onActiveTaskChanged,
+  persistForQuit,
   CIRCUMFERENCE
 }

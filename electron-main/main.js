@@ -51,5 +51,11 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  try {
+    console.log('Persistiendo timer al salir...')
+    timerService.persistForQuit()
+  } catch (err) {
+    console.error('No se pudo persistir el timer al salir:', err)
+  }
   closeConnection()
 })
