@@ -10,6 +10,8 @@ const SNAPSHOT_KEY = 'timer_snapshot'
 
 let state = {
   status: 'idle',
+  /** 'pomodoro' | 'stopwatch' */
+  controlMode: 'pomodoro',
   periodType: 'focus',
   remainingMs: 25 * 60 * 1000,
   durationMs: 25 * 60 * 1000,
@@ -22,7 +24,21 @@ let state = {
   sessionInCycle: 0,
   completedFocusToday: 0,
   completedShortBreakToday: 0,
-  completedLongBreakToday: 0
+  completedLongBreakToday: 0,
+  /** Ms de trabajo acumulados en cronómetro (solo running; se congela al pausar). */
+  stopwatchWorkMs: 0,
+  /** Timestamp Date.now() desde el que el cronómetro está corriendo. */
+  stopwatchRunningSince: null,
+  /** Ms de stopwatchWorkMs ya acreditados a la tarea. */
+  stopwatchCreditedMs: 0,
+  /** Base de display cuando no hay tarea (elapsed de focus al entrar). */
+  stopwatchDisplayOffsetMs: 0,
+  /** remainingMs del pomodoro al entrar en cronómetro. */
+  savedPomodoroRemainingMs: null,
+  /** durationMs del pomodoro al entrar en cronómetro. */
+  savedPomodoroDurationMs: null,
+  /** periodType al entrar en cronómetro. */
+  savedPomodoroPeriodType: null
 }
 
 let tickTimer = null
@@ -42,6 +58,9 @@ function durationFor(periodType) {
 }
 
 function currentRemainingMs() {
+  if (state.controlMode === 'stopwatch') {
+    return state.remainingMs
+  }
   if (state.status === 'running' && state.endsAt) {
     return Math.max(0, state.endsAt - Date.now())
   }
@@ -50,12 +69,48 @@ function currentRemainingMs() {
 
 function currentElapsedMs() {
   if (state.status !== 'running' && state.status !== 'paused') return 0
+  if (state.controlMode === 'stopwatch') {
+    return currentStopwatchWorkMs()
+  }
   return Math.max(0, state.durationMs - currentRemainingMs())
+}
+
+function currentStopwatchWorkMs() {
+  let ms = state.stopwatchWorkMs
+  if (
+    state.controlMode === 'stopwatch' &&
+    state.status === 'running' &&
+    state.stopwatchRunningSince
+  ) {
+    ms += Math.max(0, Date.now() - state.stopwatchRunningSince)
+  }
+  return Math.max(0, ms)
+}
+
+function freezeStopwatchWork() {
+  if (
+    state.controlMode === 'stopwatch' &&
+    state.status === 'running' &&
+    state.stopwatchRunningSince
+  ) {
+    state.stopwatchWorkMs += Math.max(0, Date.now() - state.stopwatchRunningSince)
+    state.stopwatchRunningSince = null
+  }
 }
 
 function clearAttribution() {
   state.bindingTaskId = null
   state.creditedMs = 0
+}
+
+function clearStopwatchFields() {
+  state.stopwatchWorkMs = 0
+  state.stopwatchRunningSince = null
+  state.stopwatchCreditedMs = 0
+  state.stopwatchDisplayOffsetMs = 0
+  state.savedPomodoroRemainingMs = null
+  state.savedPomodoroDurationMs = null
+  state.savedPomodoroPeriodType = null
 }
 
 function addAccumulatedMs(taskId, ms, atIso) {
@@ -76,6 +131,9 @@ function addAccumulatedMs(taskId, ms, atIso) {
  * @returns {number} ms acreditados en esta llamada
  */
 function flushUncreditedSegment() {
+  if (state.controlMode === 'stopwatch') {
+    return flushStopwatchCredits()
+  }
   if (state.periodType !== 'focus') return 0
   if (state.status !== 'running' && state.status !== 'paused') return 0
 
@@ -91,12 +149,76 @@ function flushUncreditedSegment() {
   return uncredited
 }
 
+function flushStopwatchCredits() {
+  if (state.controlMode !== 'stopwatch') return 0
+  if (state.status !== 'running' && state.status !== 'paused') return 0
+
+  const work = currentStopwatchWorkMs()
+  const uncredited = Math.max(0, work - state.stopwatchCreditedMs)
+  if (uncredited > 0 && state.bindingTaskId) {
+    addAccumulatedMs(state.bindingTaskId, uncredited)
+    state.stopwatchCreditedMs = work
+    taskService.emitChanged()
+  } else {
+    state.stopwatchCreditedMs = work
+  }
+  return uncredited
+}
+
+/**
+ * Tiempo ya dedicado a la tarea activa (BD + tramo no acreditado del periodo).
+ */
+function taskDedicatedMs() {
+  const settings = settingsService.getAll()
+  const taskId = state.bindingTaskId || settings.active_task_id || null
+  let base = 0
+  if (taskId) {
+    const task = taskService.getById(taskId)
+    if (task) base = Math.max(0, Number(task.accumulated_ms) || 0)
+  }
+  if (
+    state.controlMode === 'pomodoro' &&
+    state.periodType === 'focus' &&
+    (state.status === 'running' || state.status === 'paused')
+  ) {
+    base += Math.max(0, currentElapsedMs() - state.creditedMs)
+  }
+  return base
+}
+
+function currentStopwatchDisplayMs() {
+  const settings = settingsService.getAll()
+  const taskId = state.bindingTaskId || settings.active_task_id || null
+  if (taskId) {
+    const task = taskService.getById(taskId)
+    const base = task ? Math.max(0, Number(task.accumulated_ms) || 0) : 0
+    const uncredited = Math.max(
+      0,
+      currentStopwatchWorkMs() - state.stopwatchCreditedMs
+    )
+    return base + uncredited
+  }
+  return state.stopwatchDisplayOffsetMs + currentStopwatchWorkMs()
+}
+
 /**
  * Al cambiar la tarea activa durante un focus: acredita el tiempo al anterior
  * y empieza un nuevo tramo en la nueva tarea.
  */
 function onActiveTaskChanged(newTaskId) {
   const nextId = newTaskId ? Number(newTaskId) : null
+  if (state.controlMode === 'stopwatch') {
+    if (state.status === 'running' || state.status === 'paused') {
+      if (nextId === state.bindingTaskId) return
+      flushStopwatchCredits()
+      state.bindingTaskId = nextId
+      broadcast()
+    } else if (state.status === 'idle') {
+      state.bindingTaskId = nextId
+    }
+    return
+  }
+
   if (
     state.periodType === 'focus' &&
     (state.status === 'running' || state.status === 'paused')
@@ -111,6 +233,24 @@ function onActiveTaskChanged(newTaskId) {
 }
 
 function getState() {
+  if (state.controlMode === 'stopwatch') {
+    const elapsedMs = currentStopwatchDisplayMs()
+    const focusDuration = durationFor('focus')
+    const cycleMs = focusDuration > 0 ? elapsedMs % focusDuration : 0
+    const progress = focusDuration > 0 ? cycleMs / focusDuration : 0
+    const workMs = currentStopwatchWorkMs()
+    return {
+      ...state,
+      remainingMs: state.savedPomodoroRemainingMs ?? state.remainingMs,
+      elapsedMs,
+      segmentElapsedMs: Math.max(0, workMs - state.stopwatchCreditedMs),
+      progress,
+      strokeDashoffset: CIRCUMFERENCE * (1 - progress),
+      circumference: CIRCUMFERENCE,
+      display: formatElapsedMs(elapsedMs)
+    }
+  }
+
   const remainingMs = currentRemainingMs()
   const progress =
     state.durationMs > 0 ? 1 - remainingMs / state.durationMs : 0
@@ -142,6 +282,17 @@ function formatMs(ms) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+function formatElapsedMs(ms) {
+  const totalSec = Math.floor(Math.max(0, ms) / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) {
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 function stopTick() {
   if (tickTimer) {
     clearInterval(tickTimer)
@@ -152,7 +303,12 @@ function stopTick() {
 function startTick() {
   stopTick()
   tickTimer = setInterval(() => {
-    if (state.status !== 'running' || !state.endsAt) return
+    if (state.status !== 'running') return
+    if (state.controlMode === 'stopwatch') {
+      broadcast()
+      return
+    }
+    if (!state.endsAt) return
     const remaining = state.endsAt - Date.now()
     if (remaining <= 0) {
       completePeriod()
@@ -164,12 +320,16 @@ function startTick() {
 }
 
 /**
- * Cambia el modo del periodo.
+ * Cambia el modo del periodo (concentración / descansos).
  * Con force=true (tras confirmación del usuario): cancela el periodo en curso
  * o en pausa, NO inserta sesión completada, y restablece remainingMs a la
  * duración configurada del nuevo modo.
  */
 function setMode(periodType, opts = {}) {
+  if (state.controlMode === 'stopwatch') {
+    return { ok: false, error: 'STOPWATCH_ACTIVE' }
+  }
+
   const force = Boolean(opts.force)
   if (
     (state.status === 'running' || state.status === 'paused') &&
@@ -200,9 +360,233 @@ function setMode(periodType, opts = {}) {
   return { ok: true, data: getState() }
 }
 
+/**
+ * Cambia entre control Pomodoro y Cronómetro.
+ * Convierte el tiempo según las reglas de traspaso.
+ */
+function setControlMode(controlMode) {
+  if (controlMode !== 'pomodoro' && controlMode !== 'stopwatch') {
+    return { ok: false, error: 'INVALID_CONTROL_MODE' }
+  }
+  if (controlMode === state.controlMode) {
+    return { ok: true, data: getState() }
+  }
+  if (controlMode === 'stopwatch') {
+    return enterStopwatch()
+  }
+  return enterPomodoroFromStopwatch()
+}
+
+function enterStopwatch() {
+  if (state.controlMode === 'pomodoro' && state.status === 'running' && state.endsAt) {
+    state.remainingMs = Math.max(0, state.endsAt - Date.now())
+  }
+
+  const wasRunning = state.status === 'running'
+  const wasPaused = state.status === 'paused'
+  const wasActive = wasRunning || wasPaused
+
+  // Persistir tramo pomodoro pendiente antes de medir la base del cronómetro
+  const dedicatedBefore = taskDedicatedMs()
+  if (wasActive && state.periodType === 'focus') {
+    flushUncreditedSegment()
+  }
+
+  const settings = settingsService.getAll()
+  const focusDuration = durationFor('focus')
+  const activeTaskId = state.bindingTaskId || settings.active_task_id || null
+
+  // Si venimos de un descanso, el traspaso de vuelta cuenta como focus completo
+  if (state.periodType !== 'focus') {
+    state.savedPomodoroRemainingMs = focusDuration
+    state.savedPomodoroDurationMs = focusDuration
+    state.savedPomodoroPeriodType = 'focus'
+    state.periodType = 'focus'
+    state.durationMs = focusDuration
+    state.remainingMs = focusDuration
+    state.bindingTaskId = activeTaskId
+    state.creditedMs = 0
+  } else {
+    state.savedPomodoroRemainingMs = state.remainingMs
+    state.savedPomodoroDurationMs = state.durationMs
+    state.savedPomodoroPeriodType = 'focus'
+    if (!wasActive) {
+      state.bindingTaskId = activeTaskId
+    }
+  }
+
+  state.controlMode = 'stopwatch'
+  state.stopwatchWorkMs = 0
+  state.stopwatchCreditedMs = 0
+  // Con tarea: el display sale de accumulated_ms. Sin tarea: conservar elapsed de focus.
+  state.stopwatchDisplayOffsetMs = activeTaskId ? 0 : dedicatedBefore
+  state.endsAt = null
+
+  if (wasRunning) {
+    state.status = 'running'
+    state.stopwatchRunningSince = Date.now()
+    if (!state.startedAt) state.startedAt = new Date().toISOString()
+    startTick()
+  } else if (wasPaused) {
+    state.status = 'paused'
+    state.stopwatchRunningSince = null
+    stopTick()
+  } else {
+    state.status = 'idle'
+    state.stopwatchRunningSince = null
+    stopTick()
+  }
+
+  broadcast()
+  return { ok: true, data: getState() }
+}
+
+/**
+ * Registra N sesiones de focus completadas durante el cronómetro.
+ * El accumulated_ms ya se flusheó; solo incrementa contadores y filas de sesión.
+ */
+function recordFocusSessionsFromStopwatch(count, taskId, durationMs) {
+  if (count <= 0) return
+  const db = getConnection()
+  const endedAt = new Date().toISOString()
+  const startedAt = state.startedAt || endedAt
+  const dur = Math.max(0, durationMs)
+
+  const tx = db.transaction(() => {
+    const insert = db.prepare(
+      `
+      INSERT INTO pomodoro_sessions (
+        period_type, started_at, ended_at, duration_ms, completed, task_id
+      ) VALUES ('focus', ?, ?, ?, 1, ?)
+    `
+    )
+    const bump = db.prepare(
+      `
+      UPDATE tasks SET
+        completed_pomodoros = completed_pomodoros + 1,
+        updated_at = ?
+      WHERE id = ?
+    `
+    )
+    for (let i = 0; i < count; i++) {
+      insert.run(startedAt, endedAt, dur, taskId)
+      if (taskId) bump.run(endedAt, taskId)
+    }
+  })
+  tx()
+
+  for (let i = 0; i < count; i++) {
+    streakService.recordFocusCompletion()
+    state.sessionInCycle += 1
+    state.completedFocusToday += 1
+  }
+  taskService.emitChanged()
+}
+
+function enterPomodoroFromStopwatch() {
+  freezeStopwatchWork()
+  flushStopwatchCredits()
+
+  const workMs = state.stopwatchWorkMs
+  const remainingAtSwitch =
+    state.savedPomodoroRemainingMs != null
+      ? state.savedPomodoroRemainingMs
+      : durationFor('focus')
+  const focusDuration = durationFor('focus')
+  const settings = settingsService.getAll()
+  const taskId = state.bindingTaskId || settings.active_task_id || null
+  const wasRunning = state.status === 'running'
+  const wasPaused = state.status === 'paused'
+
+  // remaining puede ser negativo tras restar el tiempo en cronómetro
+  let remaining = remainingAtSwitch - workMs
+  let sessionsCompleted = 0
+
+  if (remaining <= 0) {
+    // Se agotó el remanente del pomodoro que había al cambiar
+    sessionsCompleted = 1
+    const overrun = -remaining
+    if (focusDuration > 0) {
+      sessionsCompleted += Math.floor(overrun / focusDuration)
+      const leftover = overrun % focusDuration
+      remaining = leftover === 0 ? focusDuration : focusDuration - leftover
+    } else {
+      remaining = 0
+    }
+  }
+
+  if (sessionsCompleted > 0) {
+    recordFocusSessionsFromStopwatch(sessionsCompleted, taskId, focusDuration)
+  }
+
+  const nextDuration = focusDuration
+  const nextRemaining = Math.max(0, remaining)
+  state.controlMode = 'pomodoro'
+  state.periodType = 'focus'
+  state.durationMs = nextDuration
+  state.remainingMs = nextRemaining
+  // Ese tramo (duration - remaining) ya se acreditó al entrar/usar el cronómetro.
+  // Si creditedMs queda en 0, la UI y el próximo flush lo vuelven a sumar.
+  state.creditedMs =
+    nextRemaining > 0 && nextRemaining < nextDuration
+      ? Math.max(0, nextDuration - nextRemaining)
+      : 0
+  state.bindingTaskId = settings.active_task_id || null
+  state.endsAt = null
+  clearStopwatchFields()
+
+  if (wasRunning && state.remainingMs > 0) {
+    state.status = 'running'
+    state.startedAt = new Date().toISOString()
+    state.endsAt = Date.now() + state.remainingMs
+    startTick()
+  } else if (wasPaused && state.remainingMs > 0) {
+    state.status = 'paused'
+    stopTick()
+  } else if (sessionsCompleted > 0 && state.remainingMs === focusDuration) {
+    // Exactamente al límite de una sesión: dejar listo el siguiente pomodoro
+    state.status = 'idle'
+    state.startedAt = null
+    state.creditedMs = 0
+    stopTick()
+    notificationService.notifyPeriodComplete('focus')
+  } else if (wasRunning || wasPaused) {
+    state.status = 'paused'
+    stopTick()
+  } else {
+    state.status = 'idle'
+    state.startedAt = null
+    state.creditedMs = 0
+    stopTick()
+  }
+
+  broadcast()
+  return { ok: true, data: getState() }
+}
+
 function start(opts = {}) {
   if (state.status === 'running') {
     return { ok: false, error: 'ALREADY_RUNNING' }
+  }
+
+  if (state.controlMode === 'stopwatch') {
+    if (opts.periodType) {
+      return { ok: false, error: 'STOPWATCH_ACTIVE' }
+    }
+    const settings = settingsService.getAll()
+    state.status = 'running'
+    state.periodType = 'focus'
+    if (!state.startedAt) state.startedAt = new Date().toISOString()
+    state.bindingTaskId = settings.active_task_id || null
+    state.stopwatchRunningSince = Date.now()
+    state.endsAt = null
+    if (opts.taskId) {
+      taskService.setActive(opts.taskId)
+      state.bindingTaskId = Number(opts.taskId)
+    }
+    startTick()
+    broadcast()
+    return { ok: true, data: getState() }
   }
 
   if (opts.periodType) {
@@ -235,6 +619,13 @@ function pause() {
   if (state.status !== 'running') {
     return { ok: false, error: 'NOT_RUNNING' }
   }
+  if (state.controlMode === 'stopwatch') {
+    freezeStopwatchWork()
+    state.status = 'paused'
+    stopTick()
+    broadcast()
+    return { ok: true, data: getState() }
+  }
   state.remainingMs = Math.max(0, state.endsAt - Date.now())
   state.endsAt = null
   state.status = 'paused'
@@ -247,6 +638,13 @@ function resume() {
   if (state.status !== 'paused') {
     return { ok: false, error: 'NOT_PAUSED' }
   }
+  if (state.controlMode === 'stopwatch') {
+    state.status = 'running'
+    state.stopwatchRunningSince = Date.now()
+    startTick()
+    broadcast()
+    return { ok: true, data: getState() }
+  }
   state.status = 'running'
   state.endsAt = Date.now() + state.remainingMs
   startTick()
@@ -256,6 +654,24 @@ function resume() {
 
 function reset() {
   stopTick()
+  if (state.controlMode === 'stopwatch') {
+    // Descarta trabajo no acreditado del cronómetro; lo ya flusheado permanece.
+    const settings = settingsService.getAll()
+    state = {
+      ...state,
+      status: 'idle',
+      stopwatchWorkMs: 0,
+      stopwatchRunningSince: null,
+      stopwatchCreditedMs: 0,
+      stopwatchDisplayOffsetMs: 0,
+      endsAt: null,
+      startedAt: null,
+      bindingTaskId: settings.active_task_id || null,
+      creditedMs: 0
+    }
+    broadcast()
+    return { ok: true, data: getState() }
+  }
   // Descarta el tramo no acreditado; lo ya flusheado a otras tareas permanece.
   const durationMs = durationFor(state.periodType)
   const settings = settingsService.getAll()
@@ -279,6 +695,8 @@ function stop() {
 }
 
 function completePeriod() {
+  if (state.controlMode === 'stopwatch') return
+
   stopTick()
   const endedAt = new Date().toISOString()
   const startedAt = state.startedAt || endedAt
@@ -361,6 +779,7 @@ function completePeriod() {
 
 function syncDurationsFromSettings() {
   if (state.status !== 'idle') return
+  if (state.controlMode === 'stopwatch') return
   const durationMs = durationFor(state.periodType)
   state.remainingMs = durationMs
   state.durationMs = durationMs
@@ -406,13 +825,20 @@ function writeSnapshot() {
 
   const payload = JSON.stringify({
     status: state.status,
+    controlMode: state.controlMode,
     periodType: state.periodType,
     remainingMs: state.remainingMs,
     durationMs: state.durationMs,
     startedAt: state.startedAt,
     bindingTaskId: state.bindingTaskId,
     creditedMs: state.creditedMs,
-    sessionInCycle: state.sessionInCycle
+    sessionInCycle: state.sessionInCycle,
+    stopwatchWorkMs: state.stopwatchWorkMs,
+    stopwatchCreditedMs: state.stopwatchCreditedMs,
+    stopwatchDisplayOffsetMs: state.stopwatchDisplayOffsetMs,
+    savedPomodoroRemainingMs: state.savedPomodoroRemainingMs,
+    savedPomodoroDurationMs: state.savedPomodoroDurationMs,
+    savedPomodoroPeriodType: state.savedPomodoroPeriodType
   })
   db.prepare(
     `
@@ -442,6 +868,8 @@ function restoreSnapshot() {
     return false
   }
 
+  const controlMode =
+    snap.controlMode === 'stopwatch' ? 'stopwatch' : 'pomodoro'
   const remainingMs = Math.max(0, Number(snap.remainingMs) || 0)
   const durationMs = Math.max(remainingMs, Number(snap.durationMs) || 0)
   const periodType = snap.periodType
@@ -452,6 +880,47 @@ function restoreSnapshot() {
   const wasActive =
     snap.status === 'paused' || snap.status === 'running'
 
+  if (controlMode === 'stopwatch') {
+    if (!wasActive) {
+      clearSnapshot()
+      return false
+    }
+    state = {
+      ...state,
+      status: 'paused',
+      controlMode: 'stopwatch',
+      periodType: periodType === 'focus' ? 'focus' : 'focus',
+      remainingMs,
+      durationMs: durationMs || durationFor('focus'),
+      endsAt: null,
+      startedAt: snap.startedAt || null,
+      bindingTaskId:
+        snap.bindingTaskId != null ? Number(snap.bindingTaskId) : null,
+      creditedMs: Math.max(0, Number(snap.creditedMs) || 0),
+      sessionInCycle: Number.isFinite(Number(snap.sessionInCycle))
+        ? Number(snap.sessionInCycle)
+        : state.sessionInCycle,
+      stopwatchWorkMs: Math.max(0, Number(snap.stopwatchWorkMs) || 0),
+      stopwatchRunningSince: null,
+      stopwatchCreditedMs: Math.max(0, Number(snap.stopwatchCreditedMs) || 0),
+      stopwatchDisplayOffsetMs: Math.max(
+        0,
+        Number(snap.stopwatchDisplayOffsetMs) || 0
+      ),
+      savedPomodoroRemainingMs:
+        snap.savedPomodoroRemainingMs != null
+          ? Math.max(0, Number(snap.savedPomodoroRemainingMs))
+          : null,
+      savedPomodoroDurationMs:
+        snap.savedPomodoroDurationMs != null
+          ? Math.max(0, Number(snap.savedPomodoroDurationMs))
+          : null,
+      savedPomodoroPeriodType: snap.savedPomodoroPeriodType || 'focus'
+    }
+    clearSnapshot()
+    return true
+  }
+
   if (!wasActive || !validType || remainingMs <= 0 || durationMs <= 0) {
     clearSnapshot()
     return false
@@ -460,6 +929,7 @@ function restoreSnapshot() {
   state = {
     ...state,
     status: 'paused',
+    controlMode: 'pomodoro',
     periodType,
     remainingMs,
     durationMs,
@@ -472,6 +942,7 @@ function restoreSnapshot() {
       ? Number(snap.sessionInCycle)
       : state.sessionInCycle
   }
+  clearStopwatchFields()
   clearSnapshot()
   return true
 }
@@ -482,8 +953,12 @@ function restoreSnapshot() {
  */
 function persistForQuit() {
   if (state.status === 'running') {
-    state.remainingMs = Math.max(0, (state.endsAt || Date.now()) - Date.now())
-    state.endsAt = null
+    if (state.controlMode === 'stopwatch') {
+      freezeStopwatchWork()
+    } else {
+      state.remainingMs = Math.max(0, (state.endsAt || Date.now()) - Date.now())
+      state.endsAt = null
+    }
     state.status = 'paused'
     stopTick()
   }
@@ -496,8 +971,10 @@ function init() {
   state.remainingMs = durationMs
   state.durationMs = durationMs
   state.periodType = 'focus'
+  state.controlMode = 'pomodoro'
   state.status = 'idle'
   clearAttribution()
+  clearStopwatchFields()
   try {
     loadCompletedCountsToday()
     const restored = restoreSnapshot()
@@ -514,6 +991,7 @@ module.exports = {
   init,
   getState,
   setMode,
+  setControlMode,
   start,
   pause,
   resume,

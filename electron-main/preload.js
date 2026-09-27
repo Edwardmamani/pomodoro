@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     stop: () => invoke('pomodoro:timer:stop'),
     setMode: (periodType, opts) =>
       invoke('pomodoro:timer:setMode', periodType, opts),
+    setControlMode: (controlMode) =>
+      invoke('pomodoro:timer:setControlMode', controlMode),
     onState: (cb) => {
       const handler = (_e, state) => cb(state)
       ipcRenderer.on('pomodoro:timer:state', handler)

@@ -132,7 +132,142 @@ async function testPersistOnQuit() {
   }
 }
 
+async function testControlModeSwitch() {
+  settingsService.setMany({ focus_minutes: 25 })
+  timerService.reset()
+  timerService.setMode('focus')
+
+  const startRes = timerService.start()
+  if (!startRes.ok) throw new Error('start falló en testControlModeSwitch')
+  await new Promise((r) => setTimeout(r, 1100))
+
+  const before = timerService.getState()
+  if (before.controlMode !== 'pomodoro') {
+    throw new Error('Debería estar en pomodoro')
+  }
+  const remainingBefore = before.remainingMs
+
+  const toSw = timerService.setControlMode('stopwatch')
+  if (!toSw.ok) throw new Error('setControlMode stopwatch falló')
+  const sw = timerService.getState()
+  if (sw.controlMode !== 'stopwatch') {
+    throw new Error('No cambió a stopwatch')
+  }
+  if (sw.status !== 'running') {
+    throw new Error('Cronómetro debería seguir running')
+  }
+  // Display cuenta desde tiempo dedicado a la tarea (>= tiempo ya flusheado)
+  if (typeof sw.display !== 'string' || !sw.display.includes(':')) {
+    throw new Error(`Display cronómetro inválido: ${sw.display}`)
+  }
+
+  await new Promise((r) => setTimeout(r, 1100))
+  const mid = timerService.getState()
+  if (mid.elapsedMs < 500) {
+    throw new Error('Cronómetro no avanzó el display de la tarea')
+  }
+
+  const focusBefore = mid.completedFocusToday
+  const back = timerService.setControlMode('pomodoro')
+  if (!back.ok) throw new Error('vuelta a pomodoro falló')
+  const after = timerService.getState()
+  if (after.controlMode !== 'pomodoro') {
+    throw new Error('No volvió a pomodoro')
+  }
+  // remaining = remainingBefore - workInStopwatch ≈ remainingBefore - 1100ms (más el 1er segundo ya no está en remaining del pomodoro al cambiar)
+  // Al entrar a stopwatch se congeló remainingBefore; luego ~1.1s de work
+  if (after.remainingMs > remainingBefore) {
+    throw new Error(
+      `remaining debería bajar o igualar tras cronómetro: ${after.remainingMs} > ${remainingBefore}`
+    )
+  }
+  if (after.remainingMs > remainingBefore - 500) {
+    throw new Error(
+      `remaining no restó el tiempo de cronómetro: ${after.remainingMs} vs ${remainingBefore}`
+    )
+  }
+  if (after.completedFocusToday < focusBefore) {
+    throw new Error('completedFocusToday no debería bajar')
+  }
+
+  // Caso sesiones: focus muy corto para completar ≥1 sesión en cronómetro
+  settingsService.setMany({ focus_minutes: 0.05 }) // 3s
+  timerService.reset()
+  timerService.setMode('focus')
+  timerService.start()
+  await new Promise((r) => setTimeout(r, 200))
+  const focusAtSwitch = timerService.getState().completedFocusToday
+  timerService.setControlMode('stopwatch')
+  await new Promise((r) => setTimeout(r, 3500))
+  timerService.setControlMode('pomodoro')
+  const afterSessions = timerService.getState()
+  if (afterSessions.completedFocusToday < focusAtSwitch + 1) {
+    throw new Error(
+      `Cronómetro debería completar ≥1 focus: ${afterSessions.completedFocusToday} vs ${focusAtSwitch}`
+    )
+  }
+
+  settingsService.setMany({ focus_minutes: 25 })
+  timerService.reset()
+}
+
+function taskAccumulated(taskId) {
+  const row = taskService.list().find((t) => t.id === taskId)
+  return row ? Number(row.accumulated_ms) || 0 : 0
+}
+
+async function testNoDoubleCountOnModeSwitch() {
+  settingsService.setMany({ focus_minutes: 25 })
+  timerService.reset()
+  timerService.setMode('focus')
+  timerService.start()
+  await new Promise((r) => setTimeout(r, 1500))
+
+  const taskId = created.data.id
+
+  // Entrar a cronómetro flushea el tramo de focus (~1.5s)
+  timerService.setControlMode('stopwatch')
+  const afterEnterSw = taskAccumulated(taskId)
+  if (afterEnterSw < 500) {
+    throw new Error(`Flush al entrar a cronómetro falló: ${afterEnterSw}`)
+  }
+
+  await new Promise((r) => setTimeout(r, 400))
+  timerService.setControlMode('pomodoro')
+
+  const afterBack = taskAccumulated(taskId)
+  const stopwatchDelta = afterBack - afterEnterSw
+  if (stopwatchDelta > 2000) {
+    throw new Error(
+      `Cronómetro acreditó de más: +${stopwatchDelta}ms (enter ${afterEnterSw}, back ${afterBack})`
+    )
+  }
+
+  const st = timerService.getState()
+  const elapsed = st.elapsedMs || 0
+  const credited = st.creditedMs || 0
+  if (Math.abs(elapsed - credited) > 50) {
+    throw new Error(
+      `Tras volver, creditedMs debe igualar elapsed para no re-sumar: elapsed=${elapsed} credited=${credited}`
+    )
+  }
+
+  // Un flush posterior no debe re-acreditar el tramo ya contado
+  timerService.persistForQuit()
+  const afterPersist = taskAccumulated(taskId)
+  if (afterPersist - afterBack > 100) {
+    throw new Error(
+      `persistForQuit re-acreditó tiempo ya contado: +${afterPersist - afterBack}ms`
+    )
+  }
+
+  timerService.init()
+  timerService.reset()
+}
+
 testPersistOnQuit()
+  .then(() => testControlModeSwitch())
+  .then(() => testNoDoubleCountOnModeSwitch())
   .then(() => {
     closeConnection()
     console.log('SMOKE_OK', {

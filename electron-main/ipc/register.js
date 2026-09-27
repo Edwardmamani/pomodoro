@@ -24,6 +24,9 @@ function registerIpc() {
   ipcMain.handle('pomodoro:timer:setMode', (_e, periodType, opts) =>
     timerService.setMode(periodType, opts || {})
   )
+  ipcMain.handle('pomodoro:timer:setControlMode', (_e, controlMode) =>
+    timerService.setControlMode(controlMode)
+  )
 
   ipcMain.handle('pomodoro:tasks:list', (_e, filters) =>
     ok(taskService.list(filters || {}))

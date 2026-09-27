@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 export const useTimerStore = defineStore('timer', () => {
   const state = ref({
     status: 'idle',
+    controlMode: 'pomodoro',
     periodType: 'focus',
     remainingMs: 25 * 60 * 1000,
     durationMs: 25 * 60 * 1000,
@@ -25,10 +26,11 @@ export const useTimerStore = defineStore('timer', () => {
 
   const isRunning = computed(() => state.value.status === 'running')
   const isPaused = computed(() => state.value.status === 'paused')
+  const isStopwatch = computed(() => state.value.controlMode === 'stopwatch')
 
   /** Ms del tramo actual de focus aún no persistidos (tarea bindingTaskId). */
   const segmentElapsedMs = computed(() => {
-    if (state.value.periodType !== 'focus') return 0
+    if (state.value.periodType !== 'focus' && !isStopwatch.value) return 0
     if (state.value.status !== 'running' && state.value.status !== 'paused') {
       return 0
     }
@@ -78,6 +80,14 @@ export const useTimerStore = defineStore('timer', () => {
     return res
   }
 
+  async function setControlMode(controlMode) {
+    const res = await window.pomodoroAPI.timer.setControlMode(controlMode)
+    if (res?.ok && res.data) {
+      state.value = { ...state.value, ...res.data }
+    }
+    return res
+  }
+
   async function toggle() {
     if (isRunning.value) return pause()
     if (isPaused.value) return resume()
@@ -88,6 +98,7 @@ export const useTimerStore = defineStore('timer', () => {
     state,
     isRunning,
     isPaused,
+    isStopwatch,
     focusElapsedMs,
     segmentElapsedMs,
     refresh,
@@ -98,6 +109,7 @@ export const useTimerStore = defineStore('timer', () => {
     reset,
     stop,
     setMode,
+    setControlMode,
     toggle
   }
 })
