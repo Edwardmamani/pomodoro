@@ -58,5 +58,16 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
       return () =>
         ipcRenderer.removeListener('pomodoro:sound:play', handler)
     }
+  },
+  notes: {
+    load: (taskId) => invoke('pomodoro:notes:load', taskId),
+    save: (taskId, content) => invoke('pomodoro:notes:save', taskId, content),
+    pickAsset: (taskId) => invoke('pomodoro:notes:pickAsset', taskId)
   }
+})
+
+// Compatibilidad con editor-markdown (resuelve imágenes locales vía mdmedia://)
+contextBridge.exposeInMainWorld('api', {
+  mediaUrl: (documentPath, href) =>
+    ipcRenderer.sendSync('pomodoro:notes:mediaUrl', { documentPath, href })
 })

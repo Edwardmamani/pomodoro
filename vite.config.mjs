@@ -13,7 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'ui')
-    }
+    },
+    dedupe: ['vue']
   },
   server: {
     host: '127.0.0.1',

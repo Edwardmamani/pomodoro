@@ -5,6 +5,7 @@ const settingsService = require('../services/settings.service')
 const streakService = require('../services/streak.service')
 const exportService = require('../services/export.service')
 const musicService = require('../services/music.service')
+const notesService = require('../services/notes.service')
 
 function ok(data) {
   return { ok: true, data }
@@ -67,6 +68,17 @@ function registerIpc() {
   ipcMain.handle('pomodoro:music:add', (_e, input) =>
     musicService.add(input || {})
   )
+
+  ipcMain.handle('pomodoro:notes:load', (_e, taskId) => notesService.load(taskId))
+  ipcMain.handle('pomodoro:notes:save', (_e, taskId, content) =>
+    notesService.save(taskId, content)
+  )
+  ipcMain.handle('pomodoro:notes:pickAsset', (_e, taskId) =>
+    notesService.pickAsset(taskId)
+  )
+  ipcMain.on('pomodoro:notes:mediaUrl', (event, { documentPath, href }) => {
+    event.returnValue = notesService.resolveMediaUrl(documentPath, href)
+  })
 
   taskService.onChanged(() => {
     for (const win of BrowserWindow.getAllWindows()) {

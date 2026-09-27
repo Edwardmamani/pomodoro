@@ -12,7 +12,12 @@
     "mcp": "node mcp/index.js",
     "smoke": "ELECTRON_RUN_AS_NODE=1 electron scripts/smoke-services.js"
   },
-  "keywords": ["electron", "vue", "sqlite", "pomodoro"],
+  "keywords": [
+    "electron",
+    "vue",
+    "sqlite",
+    "pomodoro"
+  ],
   "author": "Edward-dev",
   "license": "ISC",
   "packageManager": "pnpm@12.4.1",
@@ -26,6 +31,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "editor-markdown": "file:vendor/editor-markdown",
     "pinia": "^4.0.3",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"

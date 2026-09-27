@@ -1,0 +1,52 @@
+/**
+ * Estilos de librería (seguros para hosts con Tailwind u otros CSS globales).
+ * Importar: `import "editor-markdown/editor.css"`
+ * No resetea html/body/#app.
+ */
+
+.md-editor-root {
+  color-scheme: dark;
+  --bg: #12141a;
+  --panel: #1a1e27;
+  --border: #2b3240;
+  --text: #e8ecf4;
+  --muted: #9aa3b5;
+  --accent: #6ea8fe;
+  --accent-strong: #4d8dff;
+  --danger: #f07178;
+  box-sizing: border-box;
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.md-editor-root *,
+.md-editor-root *::before,
+.md-editor-root *::after {
+  box-sizing: border-box;
+}
+
+.md-editor-root button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+}
+
+.md-editor-root button:hover {
+  border-color: var(--accent);
+}
+
+.md-editor-root button.primary {
+  background: var(--accent-strong);
+  border-color: transparent;
+  color: #0b1220;
+  font-weight: 600;
+}
+
+.md-editor-root button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

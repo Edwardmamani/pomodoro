@@ -268,6 +268,23 @@ async function testNoDoubleCountOnModeSwitch() {
 testPersistOnQuit()
   .then(() => testControlModeSwitch())
   .then(() => testNoDoubleCountOnModeSwitch())
+  .then(async () => {
+    const notesService = require('../electron-main/services/notes.service')
+    const taskId = created.data.id
+    const saveRes = await notesService.save(taskId, '# Nota smoke\n\nHola')
+    if (!saveRes.ok) throw new Error('notes.save failed')
+    const loadRes = await notesService.load(taskId)
+    if (!loadRes.ok || loadRes.data.content !== '# Nota smoke\n\nHola') {
+      throw new Error('notes.load mismatch')
+    }
+    if (!fs.existsSync(loadRes.data.filePath)) {
+      throw new Error('note.md missing on disk')
+    }
+    notesService.removeForTask(taskId)
+    if (fs.existsSync(path.dirname(loadRes.data.filePath))) {
+      throw new Error('task note dir not removed')
+    }
+  })
   .then(() => {
     closeConnection()
     console.log('SMOKE_OK', {

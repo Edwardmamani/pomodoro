@@ -1,12 +1,28 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, protocol, net } = require('electron')
 const path = require('path')
+const { pathToFileURL } = require('url')
 const { runMigrations } = require('./db/migrations')
 const { runSeed } = require('./db/seed')
 const { closeConnection } = require('./db/connection')
 const { registerIpc } = require('./ipc/register')
 const timerService = require('./services/timer.service')
+const notesService = require('./services/notes.service')
 
 const isDev = process.env.ELECTRON_DEV === '1'
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'mdmedia',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true,
+      corsEnabled: true
+    }
+  }
+])
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -35,6 +51,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  protocol.handle('mdmedia', (request) => {
+    const filePath = notesService.absolutePathFromMediaUrl(request.url)
+    if (!filePath) {
+      return new Response('Not found', { status: 404 })
+    }
+    return net.fetch(pathToFileURL(filePath).href)
+  })
+
   runMigrations()
   runSeed()
   timerService.init()

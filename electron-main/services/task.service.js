@@ -302,6 +302,11 @@ function remove(id) {
     settingsService.setMany({ active_task_id: '' })
     notifyTimerActiveChanged(null)
   }
+  try {
+    require('./notes.service').removeForTask(id)
+  } catch {
+    /* la nota es auxiliar; no bloquear el borrado de la tarea */
+  }
   emitChanged()
   return { ok: true }
 }

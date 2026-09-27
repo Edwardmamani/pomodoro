@@ -1,0 +1,55 @@
+{
+  "name": "editor-markdown",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Editor Markdown modular (Vue + CodeMirror). ui/ = librería; electron/ = demo local.",
+  "main": "./ui/index.js",
+  "module": "./ui/index.js",
+  "exports": {
+    ".": "./ui/index.js",
+    "./preview": "./ui/MarkdownPreview/MarkdownPreview.vue",
+    "./source": "./ui/MarkdownEditor/MarkdownEditor.vue",
+    "./toolbar": "./ui/EditingToolbar/EditingToolbar.vue",
+    "./document": "./ui/document/createDocument.js",
+    "./preview-kit": "./ui/presets/MarkdownPreviewKit.vue",
+    "./editor.css": "./ui/editor.css",
+    "./demo.css": "./ui/style.css",
+    "./style.css": "./ui/style.css"
+  },
+  "files": [
+    "ui",
+    "examples/vite-host",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5174 && ELECTRON_DEV=1 node scripts/run-electron.cjs\"",
+    "build": "vite build",
+    "start": "vite build && node scripts/run-electron.cjs",
+    "bundle:hljs": "node scripts/bundle-hljs.mjs",
+    "pack:share": "bash scripts/pack-share.sh",
+    "test:integrate": "bash scripts/test-integrate.sh",
+    "rebuild": "electron-rebuild -f -w better-sqlite3"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.0",
+    "@codemirror/lang-markdown": "^6.3.2",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.4",
+    "codemirror": "^6.0.2",
+    "highlight.js": "^11.12.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "concurrently": "^9.1.2",
+    "electron": "^34.5.8",
+    "vite": "^6.2.0",
+    "vue": "^3.5.13",
+    "wait-on": "^8.0.2"
+  }
+}
