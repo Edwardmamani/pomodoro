@@ -267,8 +267,8 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { MarkdownPreviewKit, createDocument } from 'editor-markdown'
-import 'editor-markdown/editor.css'
+import { MarkdownPreviewKit, createDocument } from '@edward-dev/editor-markdown-vue'
+import '@edward-dev/editor-markdown-vue/editor.css'
 import { useTasksStore } from '../stores/tasks.store'
 import { useTimerStore } from '../stores/timer.store'
 import { suggestTags } from '../lib/levenshtein'

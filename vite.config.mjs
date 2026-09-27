@@ -12,9 +12,10 @@ export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'ui')
+      '@': path.resolve(__dirname, 'ui'),
+      'highlight.js': path.resolve(__dirname, 'node_modules/highlight.js/lib/index.js')
     },
-    dedupe: ['vue']
+    dedupe: ['vue', 'highlight.js']
   },
   server: {
     host: '127.0.0.1',
@@ -23,6 +24,13 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    commonjsOptions: {
+      include: [/highlight\.js/, /node_modules/]
+    }
+  },
+  optimizeDeps: {
+    include: ['highlight.js', '@edward-dev/editor-markdown-vue > highlight.js'],
+    needsInterop: ['highlight.js']
   }
 })

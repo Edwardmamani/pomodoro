@@ -66,7 +66,7 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
   }
 })
 
-// Compatibilidad con editor-markdown (resuelve imágenes locales vía mdmedia://)
+// Compatibilidad con @edward-dev/editor-markdown-vue (resuelve imágenes locales vía mdmedia://)
 contextBridge.exposeInMainWorld('api', {
   mediaUrl: (documentPath, href) =>
     ipcRenderer.sendSync('pomodoro:notes:mediaUrl', { documentPath, href })
