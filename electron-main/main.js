@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, net } = require('electron')
+const { app, BrowserWindow, protocol, net, nativeImage } = require('electron')
 const path = require('path')
 const { pathToFileURL } = require('url')
 const { runMigrations } = require('./db/migrations')
@@ -9,6 +9,12 @@ const timerService = require('./services/timer.service')
 const notesService = require('./services/notes.service')
 
 const isDev = process.env.ELECTRON_DEV === '1'
+const APP_ICON = path.join(__dirname, '..', 'assets', 'icon.png')
+
+app.setName('Pomodoro Serene Focus')
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.edwardmamani.pomodoro')
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -24,7 +30,13 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+function getAppIcon() {
+  const image = nativeImage.createFromPath(APP_ICON)
+  return image.isEmpty() ? undefined : image
+}
+
 function createWindow() {
+  const icon = getAppIcon()
   const win = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -33,6 +45,7 @@ function createWindow() {
     title: 'Pomodoro Serene Focus',
     backgroundColor: '#0f141b',
     show: false,
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -51,6 +64,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    const icon = getAppIcon()
+    if (icon && app.dock) app.dock.setIcon(icon)
+  }
+
   protocol.handle('mdmedia', (request) => {
     const filePath = notesService.absolutePathFromMediaUrl(request.url)
     if (!filePath) {

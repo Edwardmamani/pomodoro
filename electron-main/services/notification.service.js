@@ -1,5 +1,8 @@
-const { BrowserWindow, Notification } = require('electron')
+const { BrowserWindow, Notification, nativeImage } = require('electron')
+const path = require('path')
 const settingsService = require('./settings.service')
+
+const APP_ICON = path.join(__dirname, '..', 'assets', 'icon.png')
 
 function playPeriodSound(volume) {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -17,11 +20,13 @@ function notifyPeriodComplete(periodType) {
       long_break: 'Descanso largo terminado'
     }
 
+    const icon = nativeImage.createFromPath(APP_ICON)
     // silent: el chime del SO se desactiva; la campana propia va por IPC
     const n = new Notification({
       title: 'Pomodoro Serene Focus',
       body: labels[periodType] || 'Periodo completado',
-      silent: true
+      silent: true,
+      ...(icon.isEmpty() ? {} : { icon })
     })
     n.show()
   }

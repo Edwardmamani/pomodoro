@@ -1,5 +1,6 @@
 {
   "name": "pomodoro-serene-focus",
+  "productName": "Pomodoro Serene Focus",
   "version": "0.1.0",
   "description": "Aplicación Pomodoro de escritorio con Electron, Vue y SQLite",
   "main": "electron-main/main.js",
