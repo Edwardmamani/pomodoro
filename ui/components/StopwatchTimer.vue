@@ -66,7 +66,8 @@
             >
           </div>
           <span
-            class="font-display-timer text-on-surface font-light tracking-tighter tabular-nums"
+            class="timer-digits text-on-surface"
+            :class="{ 'timer-digits--long': isLongDisplay }"
             >{{ display }}</span
           >
           <div class="flex items-center gap-2 mt-1 text-on-surface-variant">
@@ -147,6 +148,8 @@ const display = computed(() => {
   return formatElapsed(timer.state.elapsedMs || 0)
 })
 
+const isLongDisplay = computed(() => String(display.value || '').length > 5)
+
 const statusLabel = computed(() => {
   if (timer.isRunning) return 'CRONÓMETRO'
   if (timer.isPaused) return 'EN PAUSA'
@@ -160,3 +163,23 @@ const toggleLabel = computed(() => {
   return 'Iniciar'
 })
 </script>
+
+<style scoped>
+.timer-digits {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 88px;
+  line-height: 96px;
+  letter-spacing: -0.04em;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timer-digits--long {
+  font-size: 52px;
+  line-height: 56px;
+  letter-spacing: -0.03em;
+}
+</style>
