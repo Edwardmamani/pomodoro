@@ -26,7 +26,7 @@
           to="/"
           class="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
           :class="
-            panel === 'tasks'
+            panel === 'tasks' || panel === 'task-edit'
               ? 'bg-surface-container-high text-primary'
               : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
           "

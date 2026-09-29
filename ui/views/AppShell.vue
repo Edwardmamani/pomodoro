@@ -32,12 +32,16 @@
         ></div>
       </div>
 
-      <!-- sidebar -->
+      <!-- Panel lateral -->
       <div
         class="min-h-0 flex-shrink-0 overflow-hidden"
         :style="{ width: `${sidebarWidth}px` }"
       >
-        <TaskSidebar v-if="panel === 'tasks'" />
+        <TaskPanel v-if="panel === 'tasks'" />
+        <TaskEditMarkDownPanel
+          v-else-if="panel === 'task-edit'"
+          :task-id="route.params.taskId"
+        />
         <SettingsPanel v-else />
       </div>
     </div>
@@ -51,7 +55,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '../components/AppHeader.vue'
 import TimerStage from '../components/TimerStage.vue'
-import TaskSidebar from '../components/TaskSidebar.vue'
+import TaskPanel from '../components/TaskPanel.vue'
+import TaskEditMarkDownPanel from '../components/TaskEditMarkDownPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import MusicFooter from '../components/MusicFooter.vue'
 import { useTimerStore } from '../stores/timer.store'

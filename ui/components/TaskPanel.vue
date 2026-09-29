@@ -28,7 +28,7 @@
       </div>
 
       <!-- Buscador y filtros -->
-      <div v-if="!editingTaskId" class="flex items-center gap-2 w-full">
+      <div class="flex items-center gap-2 w-full">
         <div class="relative flex-1 min-w-0">
           <span
             class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline"
@@ -46,14 +46,7 @@
       </div>
     </div>
 
-    <TaskEditPanel
-      v-if="editingTaskId"
-      :task-id="editingTaskId"
-      @close="editingTaskId = null"
-    />
-
-    <template v-else>
-      <div class="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto">
+    <div class="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto">
         <!-- Tareas abiertas -->
         <div
           class="flex items-center justify-between px-1 pt-1 pb-0.5 text-on-surface-variant shrink-0"
@@ -76,79 +69,12 @@
         </div>
 
         <!-- Lista de tareas abiertas -->
-        <button
+        <TaskOpenItem
           v-for="task in tasks.openTasks"
           :key="task.id"
-          type="button"
-          class="group flex items-start gap-3 p-3 rounded-xl text-left transition-all cursor-pointer w-full"
-          :class="
-            task.id === tasks.activeTaskId
-              ? 'bg-surface-container-high text-on-surface shadow-sm'
-              : 'hover:bg-surface-container'
-          "
-          @click="openEdit(task.id)"
-        >
-          <div class="mt-0.5 flex-shrink-0" @click.stop>
-            <TaskStatusMenu
-              :task-id="task.id"
-              :status="task.status"
-              :accent="task.id === tasks.activeTaskId"
-            />
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-1">
-              <span
-                class="truncate"
-                :class="
-                  task.id === tasks.activeTaskId
-                    ? 'font-label-md text-on-surface'
-                    : 'font-body-md text-on-surface'
-                "
-                >{{ task.title }}</span
-              >
-              <span
-                class="font-label-mono-sm px-1.5 py-0.2 rounded shrink-0"
-                :class="priorityClass(task.priority)"
-                >{{ priorityLabel(task.priority) }}</span
-              >
-            </div>
-            <div
-              class="flex items-center gap-2 mt-1.5 text-on-surface-variant font-label-mono-sm flex-wrap"
-            >
-              <span
-                v-if="task.tags[0]"
-                class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
-                >{{ task.tags[0] }}</span
-              >
-              <span
-                v-if="task.due_date"
-                class="px-1.5 py-0.5 rounded bg-surface-container inline-flex items-center gap-0.5"
-                :class="dueDateClass(task)"
-                :title="'Finaliza ' + task.due_date"
-              >
-                <span class="material-symbols-outlined text-[11px]">event</span>
-                {{ formatDueDate(task.due_date) }}
-              </span>
-              <span>·</span>
-              <span
-                :class="
-                  task.id === tasks.activeTaskId ? 'text-primary' : ''
-                "
-                >{{ task.completed_pomodoros }}/{{
-                  task.estimated_pomodoros
-                }}
-                pomos</span
-              >
-              <span>·</span>
-              <span
-                :class="
-                  task.id === tasks.activeTaskId ? 'text-primary' : ''
-                "
-                >{{ formatAccumulated(liveAccumulated(task)) }}</span
-              >
-            </div>
-          </div>
-        </button>
+          :task="task"
+          @select="openTaskNotes"
+        />
 
         <!-- Tareas completadas -->
         <div
@@ -172,7 +98,6 @@
           :key="task.id"
           type="button"
           class="flex items-start gap-3 p-3 rounded-xl opacity-50 hover:opacity-75 transition-opacity bg-surface-container/40 text-left w-full cursor-pointer"
-          @click="openEdit(task.id)"
         >
           <div class="mt-0.5 flex-shrink-0" @click.stop>
             <TaskStatusMenu :task-id="task.id" :status="task.status" />
@@ -227,7 +152,6 @@
           >
         </button>
       </div>
-    </template>
 
     <TaskFormModal v-model:open="showForm" />
   </aside>
@@ -235,17 +159,18 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
-import { useTimerStore } from '../stores/timer.store'
+import { useRouter } from 'vue-router'
+import { useTasksStore } from '../stores/tasks.store.js'
+import { useTimerStore } from '../stores/timer.store.js'
 import TaskFormModal from './TaskFormModal.vue'
 import TaskStatusMenu from './TaskStatusMenu.vue'
-import TaskEditPanel from './TaskEditPanel.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
+import TaskOpenItem from './TaskOpenItem.vue'
 
+const router = useRouter()
 const tasks = useTasksStore()
 const timer = useTimerStore()
 const showForm = ref(false)
-const editingTaskId = ref(null)
 
 let searchTimer = null
 
@@ -262,25 +187,13 @@ function liveAccumulated(task) {
   return base + timer.segmentElapsedMs
 }
 
-function openEdit(id) {
-  editingTaskId.value = id
+function openTaskNotes(id) {
+  router.push(`/tarea/${id}`)
 }
 
 function onSearch() {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => tasks.refresh(), 200)
-}
-
-function priorityLabel(p) {
-  return { high: 'Alta', medium: 'Media', low: 'Baja' }[p] || p
-}
-
-function priorityClass(p) {
-  if (p === 'high')
-    return 'bg-secondary-container text-on-secondary-container'
-  if (p === 'medium')
-    return 'bg-surface-container-highest text-on-surface-variant'
-  return 'bg-surface-container-highest text-outline'
 }
 
 function formatAccumulated(ms) {
@@ -292,28 +205,10 @@ function formatAccumulated(ms) {
   return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
-function todayLocal() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 function formatDueDate(iso) {
   if (!iso) return ''
   const [y, m, d] = iso.split('-')
   if (!y || !m || !d) return iso
   return `${d}/${m}`
-}
-
-function dueDateClass(task) {
-  if (!task.due_date || ['done', 'cancelled'].includes(task.status)) {
-    return 'text-outline'
-  }
-  const today = todayLocal()
-  if (task.due_date < today) return 'text-error bg-error/10'
-  if (task.due_date === today) return 'text-secondary bg-secondary/10'
-  return 'text-outline'
 }
 </script>
