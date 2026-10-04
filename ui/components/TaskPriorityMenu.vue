@@ -55,7 +55,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
+import { useTasksStore } from '@/stores/tasks.store'
 
 const OPTIONS = [
   { value: 'high', label: 'Alta', dot: 'bg-secondary' },

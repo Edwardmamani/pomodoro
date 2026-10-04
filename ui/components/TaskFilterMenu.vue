@@ -213,9 +213,9 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
-import { tagDotColor } from '../lib/tag-color'
-import StatusGlyph from './StatusGlyph.vue'
+import { useTasksStore } from '@/stores/tasks.store'
+import { tagDotColor } from '@/lib/tag-color'
+import StatusGlyph from '@/components/StatusGlyph.vue'
 
 const PRIORITY_OPTIONS = [
   { value: 'high', label: 'Alta', bars: 3 },

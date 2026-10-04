@@ -3,6 +3,7 @@
     class="relative flex-shrink-0"
     :class="variant === 'field' ? 'w-full' : ''"
   >
+    <!-- Botón de cambiar estado de tarea -->
     <button
       v-if="variant === 'field'"
       ref="triggerEl"
@@ -84,8 +85,8 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
-import StatusGlyph from './StatusGlyph.vue'
+import { useTasksStore } from '@/stores/tasks.store'
+import StatusGlyph from '@/components/StatusGlyph.vue'
 
 const OPTIONS = [
   { value: 'blocked', label: 'Bloqueado' },

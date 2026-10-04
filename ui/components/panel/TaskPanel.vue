@@ -48,7 +48,7 @@
 
     <div class="flex flex-col gap-2 mt-4 flex-1 min-h-0 overflow-y-auto">
         <!-- Tareas abiertas -->
-        <div
+        <header
           class="flex items-center justify-between px-1 pt-1 pb-0.5 text-on-surface-variant shrink-0"
         >
           <span
@@ -66,7 +66,7 @@
               tasks.filters.status === 'cancelled' ? 'cancelada' : 'abierta'
             }}{{ tasks.openTasks.length === 1 ? '' : 's' }}</span
           >
-        </div>
+        </header>
 
         <!-- Lista de tareas abiertas -->
         <TaskOpenItem
@@ -160,13 +160,13 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTasksStore } from '../stores/tasks.store.js'
-import { useTimerStore } from '../stores/timer.store.js'
-import { formatAccumulated } from '../lib/format-accumulated.js'
-import TaskFormModal from './TaskFormModal.vue'
-import TaskStatusMenu from './TaskStatusMenu.vue'
-import TaskFilterMenu from './TaskFilterMenu.vue'
-import TaskOpenItem from './TaskOpenItem.vue'
+import { useTasksStore } from '@/stores/tasks.store'
+import { useTimerStore } from '@/stores/timer.store'
+import { formatAccumulated } from '@/lib/format-accumulated'
+import TaskFormModal from '@/components/TaskFormModal.vue'
+import TaskStatusMenu from '@/components/TaskStatusMenu.vue'
+import TaskFilterMenu from '@/components/TaskFilterMenu.vue'
+import TaskOpenItem from '@/components/TaskOpenItem.vue'
 
 const router = useRouter()
 const tasks = useTasksStore()

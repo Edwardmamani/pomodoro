@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { useMusicStore } from '../stores/music.store'
+import { useMusicStore } from '@/stores/music.store'
 
 const music = useMusicStore()
 </script>

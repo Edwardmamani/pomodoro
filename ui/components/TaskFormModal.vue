@@ -229,9 +229,9 @@
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
-import { suggestTags } from '../lib/levenshtein'
-import { tagDotColor } from '../lib/tag-color'
+import { useTasksStore } from '@/stores/tasks.store'
+import { suggestTags } from '@/lib/levenshtein'
+import { tagDotColor } from '@/lib/tag-color'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['created'])

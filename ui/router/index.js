@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import AppShell from '../views/AppShell.vue'
+import AppShell from '@/views/AppShell.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),

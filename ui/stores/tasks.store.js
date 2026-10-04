@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useTimerStore } from './timer.store'
+import { useTimerStore } from '@/stores/timer.store'
 
 function emptyFilters() {
   return {

@@ -258,10 +258,10 @@
 
 <script setup>
 import { computed, ref, toRef } from 'vue'
-import { useSettingsStore } from '../stores/settings.store'
-import { useTimerStore } from '../stores/timer.store'
-import DurationRow from './DurationRow.vue'
-import ToggleSwitch from './ToggleSwitch.vue'
+import { useSettingsStore } from '@/stores/settings.store'
+import { useTimerStore } from '@/stores/timer.store'
+import DurationRow from '@/components/DurationRow.vue'
+import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
 const settingsStore = useSettingsStore()
 const timer = useTimerStore()

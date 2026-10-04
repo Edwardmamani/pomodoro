@@ -117,7 +117,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useTimerStore } from '../stores/timer.store'
+import { useTimerStore } from '@/stores/timer.store'
 
 const timer = useTimerStore()
 

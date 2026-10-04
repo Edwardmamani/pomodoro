@@ -13,6 +13,8 @@
     @keydown.enter.prevent="onCardClick"
   >
     <div class="flex items-start gap-3">
+
+      <!-- Menú de estado de tarea  ["Bloqueado", "Por hacer","En curso", "Hecha", "Cancelada"] -->
       <div class="mt-0.5 flex-shrink-0" @click.stop>
         <TaskStatusMenu
           :task-id="task.id"
@@ -21,6 +23,7 @@
         />
       </div>
 
+      <!-- Otros campos: título, prioridad, etiquetas, fecha, pomodoros, acumulado -->
       <div class="flex-1 min-w-0 pr-8">
         <div class="flex items-center justify-between gap-1">
           <input
@@ -189,7 +192,8 @@
         </div>
       </div>
     </div>
-
+    
+    <!-- Botón de eliminar tarea -->
     <div class="absolute bottom-2 right-2" @click.stop>
       <button
         type="button"
@@ -215,14 +219,14 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { useTasksStore } from '../stores/tasks.store'
-import { useTimerStore } from '../stores/timer.store'
-import { formatAccumulated } from '../lib/format-accumulated'
-import { suggestTags } from '../lib/levenshtein'
-import { tagDotColor } from '../lib/tag-color'
-import TaskStatusMenu from './TaskStatusMenu.vue'
-import TaskPriorityMenu from './TaskPriorityMenu.vue'
-import ConfirmModal from './ConfirmModal.vue'
+import { useTasksStore } from '@/stores/tasks.store'
+import { useTimerStore } from '@/stores/timer.store'
+import { formatAccumulated } from '@/lib/format-accumulated'
+import { suggestTags } from '@/lib/levenshtein'
+import { tagDotColor } from '@/lib/tag-color'
+import TaskStatusMenu from '@/components/TaskStatusMenu.vue'
+import TaskPriorityMenu from '@/components/TaskPriorityMenu.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },

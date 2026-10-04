@@ -108,10 +108,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useTimerStore } from '../stores/timer.store'
-import { useTasksStore } from '../stores/tasks.store'
-import PomodoroTimer from './PomodoroTimer.vue'
-import StopwatchTimer from './StopwatchTimer.vue'
+import { useTimerStore } from '@/stores/timer.store'
+import { useTasksStore } from '@/stores/tasks.store'
+import PomodoroTimer from '@/components/PomodoroTimer.vue'
+import StopwatchTimer from '@/components/StopwatchTimer.vue'
 
 const timer = useTimerStore()
 const tasks = useTasksStore()

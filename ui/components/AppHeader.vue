@@ -75,7 +75,7 @@
 </template>
 
 <script setup>
-import { useStreakStore } from '../stores/streak.store'
+import { useStreakStore } from '@/stores/streak.store'
 
 defineProps({
   panel: { type: String, default: 'tasks' }

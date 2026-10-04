@@ -194,9 +194,9 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { useTimerStore } from '../stores/timer.store'
-import { useSettingsStore } from '../stores/settings.store'
-import ConfirmModal from './ConfirmModal.vue'
+import { useTimerStore } from '@/stores/timer.store'
+import { useSettingsStore } from '@/stores/settings.store'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const timer = useTimerStore()
 const settings = useSettingsStore()

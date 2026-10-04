@@ -54,8 +54,8 @@ import {
   createDocument
 } from '@edward-dev/editor-markdown-vue'
 import '@edward-dev/editor-markdown-vue/editor.css'
-import { useTasksStore } from '../stores/tasks.store'
-import TaskOpenItem from './TaskOpenItem.vue'
+import { useTasksStore } from '@/stores/tasks.store'
+import TaskOpenItem from '@/components/TaskOpenItem.vue'
 
 const props = defineProps({
   taskId: { type: [Number, String], required: true }
