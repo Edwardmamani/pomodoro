@@ -162,6 +162,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTasksStore } from '../stores/tasks.store.js'
 import { useTimerStore } from '../stores/timer.store.js'
+import { formatAccumulated } from '../lib/format-accumulated.js'
 import TaskFormModal from './TaskFormModal.vue'
 import TaskStatusMenu from './TaskStatusMenu.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
@@ -194,15 +195,6 @@ function openTaskNotes(id) {
 function onSearch() {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => tasks.refresh(), 200)
-}
-
-function formatAccumulated(ms) {
-  const totalSec = Math.floor((ms || 0) / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  if (m === 0) return `${s}s`
-  if (s === 0) return `${m}m`
-  return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 function formatDueDate(iso) {

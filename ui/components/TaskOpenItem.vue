@@ -217,6 +217,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useTasksStore } from '../stores/tasks.store'
 import { useTimerStore } from '../stores/timer.store'
+import { formatAccumulated } from '../lib/format-accumulated'
 import { suggestTags } from '../lib/levenshtein'
 import { tagDotColor } from '../lib/tag-color'
 import TaskStatusMenu from './TaskStatusMenu.vue'
@@ -452,15 +453,6 @@ function blurActive() {
   if (document.activeElement instanceof HTMLElement) {
     document.activeElement.blur()
   }
-}
-
-function formatAccumulated(ms) {
-  const totalSec = Math.floor((ms || 0) / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  if (m === 0) return `${s}s`
-  if (s === 0) return `${m}m`
-  return `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 function todayLocal() {
