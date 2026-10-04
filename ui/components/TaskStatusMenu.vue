@@ -99,7 +99,6 @@ const OPTIONS = [
 const props = defineProps({
   taskId: { type: [Number, String], required: true },
   status: { type: String, required: true },
-  accent: { type: Boolean, default: false },
   variant: {
     type: String,
     default: 'glyph',
@@ -117,7 +116,7 @@ const currentLabel = computed(
 )
 
 const glyphClass = computed(() => {
-  if (props.status === 'in_progress' || props.accent) {
+  if (props.status === 'in_progress') {
     return 'bg-primary text-on-primary hover:brightness-110'
   }
   if (props.status === 'done') {

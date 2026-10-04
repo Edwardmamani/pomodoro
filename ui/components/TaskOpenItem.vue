@@ -16,11 +16,7 @@
 
       <!-- Menú de estado de tarea  ["Bloqueado", "Por hacer","En curso", "Hecha", "Cancelada"] -->
       <div class="mt-0.5 flex-shrink-0" @click.stop>
-        <TaskStatusMenu
-          :task-id="task.id"
-          :status="task.status"
-          :accent="isActive"
-        />
+        <TaskStatusMenu :task-id="task.id" :status="task.status" />
       </div>
 
       <!-- Otros campos: título, prioridad, etiquetas, fecha, pomodoros, acumulado -->
