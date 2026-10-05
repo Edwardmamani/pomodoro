@@ -76,7 +76,7 @@ class TaskController {
       this.notifyTimerActiveChanged(id)
     }
 
-    if (status === 'done') {
+    if (status === 'done' && existing.status == 'in_progress') {
       const nextTask = this.tasks.getNextTask(id)
       if (nextTask) {
         this.tasks.activate(nextTask.id)

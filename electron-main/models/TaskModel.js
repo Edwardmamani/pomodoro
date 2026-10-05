@@ -208,13 +208,21 @@ class TaskModel {
       link.run(taskId, tagId)
     }
   }
-  /** Siguiente tarea pendiente, la más antigua que sigue en 'todo'. */
+  /** Siguiente pendiente: mayor prioridad y, en empate, la entrega más próxima. */
   getNextTask(exceptId) {
     return this.db
       .prepare(
         `SELECT id FROM tasks
          WHERE status = 'todo' AND id != ?
-         ORDER BY created_at ASC
+         ORDER BY
+           CASE priority
+             WHEN 'high' THEN 0
+             WHEN 'medium' THEN 1
+             ELSE 2
+           END,
+           due_date IS NULL,
+           due_date ASC,
+           created_at ASC
          LIMIT 1`
       )
       .get(exceptId)
