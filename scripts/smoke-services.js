@@ -41,55 +41,61 @@ Module.prototype.require = function (id) {
 const { runMigrations } = require('../electron-main/db/migrations')
 const { runSeed } = require('../electron-main/db/seed')
 const { closeConnection } = require('../electron-main/db/connection')
-const timerService = require('../electron-main/services/timer.service')
-const taskService = require('../electron-main/services/task.service')
-const settingsService = require('../electron-main/services/settings.service')
-const streakService = require('../electron-main/services/streak.service')
+const timer = require('../electron-main/controllers/TimerController')
+const taskController = require('../electron-main/controllers/TaskController')
+const streakController = require('../electron-main/controllers/StreakController')
+const notesController = require('../electron-main/controllers/NotesController')
+const TaskModel = require('../electron-main/models/TaskModel')
+const SettingsModel = require('../electron-main/models/SettingsModel')
+const NoteModel = require('../electron-main/models/NoteModel')
+
+const taskModel = new TaskModel()
+const settingsModel = new SettingsModel()
 
 runMigrations()
 runSeed()
-timerService.init()
+timer.init()
 
-const tasks = taskService.list()
+const tasks = taskModel.list()
 if (tasks.length < 1) throw new Error('Seed no creó tareas')
 
-const settings = settingsService.getAll()
+const settings = settingsModel.getAll()
 if (settings.focus_minutes !== 25) throw new Error('Settings default incorrecto')
 
-settingsService.setMany({ focus_minutes: 30 })
-timerService.syncDurationsFromSettings()
-const state = timerService.getState()
+settingsModel.setMany({ focus_minutes: 30 })
+timer.syncDurationsFromSettings()
+const state = timer.getState()
 if (state.durationMs !== 30 * 60 * 1000) {
   throw new Error(`Timer no sincronizó: ${state.durationMs}`)
 }
 
-const created = taskService.create({
+const created = taskController.create(null, {
   title: 'Smoke task',
   priority: 'low',
   tags: ['Test']
 })
 if (!created.ok) throw new Error('create falló')
 
-const active = taskService.setActive(created.data.id)
+const active = taskController.setActive(null, created.data.id)
 if (!active.ok) throw new Error('setActive falló')
 
-settingsService.setMany({ focus_minutes: 25 })
-timerService.reset()
+settingsModel.setMany({ focus_minutes: 25 })
+timer.reset()
 
-const streak = streakService.getStreak()
+const streak = streakController.getStreak()
 if (typeof streak.days !== 'number') throw new Error('streak inválido')
 
 async function testPersistOnQuit() {
-  timerService.start()
+  timer.start(null)
   await new Promise((r) => setTimeout(r, 1200))
 
-  const beforeQuit = timerService.getState()
+  const beforeQuit = timer.getState()
   if (beforeQuit.status !== 'running') {
     throw new Error('Timer debería estar running antes de persistForQuit')
   }
 
-  timerService.persistForQuit()
-  const paused = timerService.getState()
+  timer.persistForQuit()
+  const paused = timer.getState()
   if (paused.status !== 'paused') {
     throw new Error(`Tras quit debería estar paused, got ${paused.status}`)
   }
@@ -97,7 +103,7 @@ async function testPersistOnQuit() {
     throw new Error('remainingMs no avanzó')
   }
 
-  const taskRows = taskService.list()
+  const taskRows = taskModel.list()
   const task = taskRows.find((t) => t.id === created.data.id)
   if (!task || task.accumulated_ms < 500) {
     throw new Error(
@@ -107,8 +113,8 @@ async function testPersistOnQuit() {
 
   const remainingSaved = paused.remainingMs
   const creditedSaved = paused.creditedMs
-  timerService.init()
-  const restored = timerService.getState()
+  timer.init()
+  const restored = timer.getState()
   if (restored.status !== 'paused') {
     throw new Error(`Tras init debería restaurar paused, got ${restored.status}`)
   }
@@ -125,31 +131,31 @@ async function testPersistOnQuit() {
   }
 
   // Segunda init sin snapshot no debe re-aplicar estado pausado
-  timerService.init()
-  const idleAgain = timerService.getState()
+  timer.init()
+  const idleAgain = timer.getState()
   if (idleAgain.status !== 'idle') {
     throw new Error('Snapshot debería consumirse tras restaurar')
   }
 }
 
 async function testControlModeSwitch() {
-  settingsService.setMany({ focus_minutes: 25 })
-  timerService.reset()
-  timerService.setMode('focus')
+  settingsModel.setMany({ focus_minutes: 25 })
+  timer.reset()
+  timer.setMode(null, 'focus')
 
-  const startRes = timerService.start()
+  const startRes = timer.start(null)
   if (!startRes.ok) throw new Error('start falló en testControlModeSwitch')
   await new Promise((r) => setTimeout(r, 1100))
 
-  const before = timerService.getState()
+  const before = timer.getState()
   if (before.controlMode !== 'pomodoro') {
     throw new Error('Debería estar en pomodoro')
   }
   const remainingBefore = before.remainingMs
 
-  const toSw = timerService.setControlMode('stopwatch')
+  const toSw = timer.setControlMode(null, 'stopwatch')
   if (!toSw.ok) throw new Error('setControlMode stopwatch falló')
-  const sw = timerService.getState()
+  const sw = timer.getState()
   if (sw.controlMode !== 'stopwatch') {
     throw new Error('No cambió a stopwatch')
   }
@@ -162,15 +168,15 @@ async function testControlModeSwitch() {
   }
 
   await new Promise((r) => setTimeout(r, 1100))
-  const mid = timerService.getState()
+  const mid = timer.getState()
   if (mid.elapsedMs < 500) {
     throw new Error('Cronómetro no avanzó el display de la tarea')
   }
 
   const focusBefore = mid.completedFocusToday
-  const back = timerService.setControlMode('pomodoro')
+  const back = timer.setControlMode(null, 'pomodoro')
   if (!back.ok) throw new Error('vuelta a pomodoro falló')
-  const after = timerService.getState()
+  const after = timer.getState()
   if (after.controlMode !== 'pomodoro') {
     throw new Error('No volvió a pomodoro')
   }
@@ -191,49 +197,49 @@ async function testControlModeSwitch() {
   }
 
   // Caso sesiones: focus muy corto para completar ≥1 sesión en cronómetro
-  settingsService.setMany({ focus_minutes: 0.05 }) // 3s
-  timerService.reset()
-  timerService.setMode('focus')
-  timerService.start()
+  settingsModel.setMany({ focus_minutes: 0.05 }) // 3s
+  timer.reset()
+  timer.setMode(null, 'focus')
+  timer.start(null)
   await new Promise((r) => setTimeout(r, 200))
-  const focusAtSwitch = timerService.getState().completedFocusToday
-  timerService.setControlMode('stopwatch')
+  const focusAtSwitch = timer.getState().completedFocusToday
+  timer.setControlMode(null, 'stopwatch')
   await new Promise((r) => setTimeout(r, 3500))
-  timerService.setControlMode('pomodoro')
-  const afterSessions = timerService.getState()
+  timer.setControlMode(null, 'pomodoro')
+  const afterSessions = timer.getState()
   if (afterSessions.completedFocusToday < focusAtSwitch + 1) {
     throw new Error(
       `Cronómetro debería completar ≥1 focus: ${afterSessions.completedFocusToday} vs ${focusAtSwitch}`
     )
   }
 
-  settingsService.setMany({ focus_minutes: 25 })
-  timerService.reset()
+  settingsModel.setMany({ focus_minutes: 25 })
+  timer.reset()
 }
 
 function taskAccumulated(taskId) {
-  const row = taskService.list().find((t) => t.id === taskId)
+  const row = taskModel.list().find((t) => t.id === taskId)
   return row ? Number(row.accumulated_ms) || 0 : 0
 }
 
 async function testNoDoubleCountOnModeSwitch() {
-  settingsService.setMany({ focus_minutes: 25 })
-  timerService.reset()
-  timerService.setMode('focus')
-  timerService.start()
+  settingsModel.setMany({ focus_minutes: 25 })
+  timer.reset()
+  timer.setMode(null, 'focus')
+  timer.start(null)
   await new Promise((r) => setTimeout(r, 1500))
 
   const taskId = created.data.id
 
   // Entrar a cronómetro flushea el tramo de focus (~1.5s)
-  timerService.setControlMode('stopwatch')
+  timer.setControlMode(null, 'stopwatch')
   const afterEnterSw = taskAccumulated(taskId)
   if (afterEnterSw < 500) {
     throw new Error(`Flush al entrar a cronómetro falló: ${afterEnterSw}`)
   }
 
   await new Promise((r) => setTimeout(r, 400))
-  timerService.setControlMode('pomodoro')
+  timer.setControlMode(null, 'pomodoro')
 
   const afterBack = taskAccumulated(taskId)
   const stopwatchDelta = afterBack - afterEnterSw
@@ -243,7 +249,7 @@ async function testNoDoubleCountOnModeSwitch() {
     )
   }
 
-  const st = timerService.getState()
+  const st = timer.getState()
   const elapsed = st.elapsedMs || 0
   const credited = st.creditedMs || 0
   if (Math.abs(elapsed - credited) > 50) {
@@ -253,7 +259,7 @@ async function testNoDoubleCountOnModeSwitch() {
   }
 
   // Un flush posterior no debe re-acreditar el tramo ya contado
-  timerService.persistForQuit()
+  timer.persistForQuit()
   const afterPersist = taskAccumulated(taskId)
   if (afterPersist - afterBack > 100) {
     throw new Error(
@@ -261,26 +267,25 @@ async function testNoDoubleCountOnModeSwitch() {
     )
   }
 
-  timerService.init()
-  timerService.reset()
+  timer.init()
+  timer.reset()
 }
 
 testPersistOnQuit()
   .then(() => testControlModeSwitch())
   .then(() => testNoDoubleCountOnModeSwitch())
   .then(async () => {
-    const notesService = require('../electron-main/services/notes.service')
     const taskId = created.data.id
-    const saveRes = await notesService.save(taskId, '# Nota smoke\n\nHola')
+    const saveRes = await notesController.save(null, taskId, '# Nota smoke\n\nHola')
     if (!saveRes.ok) throw new Error('notes.save failed')
-    const loadRes = await notesService.load(taskId)
+    const loadRes = await notesController.load(null, taskId)
     if (!loadRes.ok || loadRes.data.content !== '# Nota smoke\n\nHola') {
       throw new Error('notes.load mismatch')
     }
     if (!fs.existsSync(loadRes.data.filePath)) {
       throw new Error('note.md missing on disk')
     }
-    notesService.removeForTask(taskId)
+    new NoteModel().removeForTask(taskId)
     if (fs.existsSync(path.dirname(loadRes.data.filePath))) {
       throw new Error('task note dir not removed')
     }

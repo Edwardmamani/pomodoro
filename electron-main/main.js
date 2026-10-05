@@ -4,9 +4,9 @@ const { pathToFileURL } = require('url')
 const { runMigrations } = require('./db/migrations')
 const { runSeed } = require('./db/seed')
 const { closeConnection } = require('./db/connection')
-const { registerIpc } = require('./ipc/register')
-const timerService = require('./services/timer.service')
-const notesService = require('./services/notes.service')
+const { registerIpc } = require('./registerIpc')
+const TimerController = require('./controllers/TimerController')
+const NoteModel = require('./models/NoteModel')
 
 const isDev = process.env.ELECTRON_DEV === '1'
 const APP_ICON = path.join(__dirname, '..', 'assets', 'icon.png')
@@ -70,7 +70,7 @@ app.whenReady().then(() => {
   }
 
   protocol.handle('mdmedia', (request) => {
-    const filePath = notesService.absolutePathFromMediaUrl(request.url)
+    const filePath = NoteModel.absolutePathFromMediaUrl(request.url)
     if (!filePath) {
       return new Response('Not found', { status: 404 })
     }
@@ -79,7 +79,7 @@ app.whenReady().then(() => {
 
   runMigrations()
   runSeed()
-  timerService.init()
+  TimerController.init()
   registerIpc()
   createWindow()
 
@@ -95,7 +95,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   try {
     console.log('Persistiendo timer al salir...')
-    timerService.persistForQuit()
+    TimerController.persistForQuit()
   } catch (err) {
     console.error('No se pudo persistir el timer al salir:', err)
   }
