@@ -76,6 +76,15 @@ class TaskController {
       this.notifyTimerActiveChanged(id)
     }
 
+    if (status === 'done') {
+      const nextTask = this.tasks.getNextTask(id)
+      if (nextTask) {
+        this.tasks.activate(nextTask.id)
+        this.settings.setMany({ active_task_id: nextTask.id })
+        this.notifyTimerActiveChanged(nextTask.id)
+      }
+    }
+
     this.emitChanged()
     return { ok: true, data: this.tasks.getById(id) }
   }

@@ -208,6 +208,17 @@ class TaskModel {
       link.run(taskId, tagId)
     }
   }
+  /** Siguiente tarea pendiente, la más antigua que sigue en 'todo'. */
+  getNextTask(exceptId) {
+    return this.db
+      .prepare(
+        `SELECT id FROM tasks
+         WHERE status = 'todo' AND id != ?
+         ORDER BY created_at ASC
+         LIMIT 1`
+      )
+      .get(exceptId)
+  }
 }
 
 module.exports = TaskModel

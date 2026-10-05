@@ -89,27 +89,24 @@ const currentLabel = computed(
 )
 
 const glyphClass = computed(() => {
-  if (props.status === 'in_progress') {
-    return 'bg-primary text-on-primary hover:brightness-110'
+  const statusMap = {
+    in_progress: 'bg-primary text-on-primary hover:brightness-110',
+    done: 'bg-primary/20 text-primary hover:bg-primary/30',
+    cancelled: 'text-outline hover:bg-surface-container-high',
+    blocked: 'text-secondary hover:bg-surface-container-high',
   }
-  if (props.status === 'done') {
-    return 'bg-primary/20 text-primary hover:bg-primary/30'
-  }
-  if (props.status === 'cancelled') {
-    return 'text-outline hover:bg-surface-container-high'
-  }
-  if (props.status === 'blocked') {
-    return 'text-secondary hover:bg-surface-container-high'
-  }
-  return 'text-outline hover:bg-surface-container-high hover:text-on-surface-variant'
+
+  return statusMap[props.status] ?? 'text-outline hover:bg-surface-container-high hover:text-on-surface-variant'
 })
 
 function optionIconClass(status) {
-  if (status === 'in_progress') return 'text-primary'
-  if (status === 'done') return 'text-primary'
-  if (status === 'cancelled') return 'text-outline'
-  if (status === 'blocked') return 'text-secondary'
-  return 'text-on-surface-variant'
+  const iconMap = {
+    in_progress: 'text-primary',
+    done: 'text-primary',
+    cancelled: 'text-outline',
+    blocked: 'text-secondary',
+  }
+  return iconMap[status] ?? 'text-on-surface-variant'
 }
 
 function placeMenu() {
