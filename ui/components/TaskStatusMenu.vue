@@ -1,35 +1,10 @@
 <template>
   <div
     class="relative flex-shrink-0"
-    :class="variant === 'field' ? 'w-full' : ''"
   >
+
     <!-- Botón de cambiar estado de tarea -->
     <button
-      v-if="variant === 'field'"
-      ref="triggerEl"
-      type="button"
-      class="w-full h-10 px-3 rounded-lg bg-surface-container border border-outline-variant/30 text-on-surface font-body-sm flex items-center gap-2.5 focus:outline-none focus:border-primary/50 hover:border-outline-variant/50 transition-colors"
-      :title="'Cambiar estado · ' + currentLabel"
-      :aria-expanded="open"
-      aria-haspopup="listbox"
-      @click.stop="toggle"
-    >
-      <span
-        class="w-5 h-5 flex items-center justify-center rounded-full shrink-0 transition-colors"
-        :class="glyphClass"
-      >
-        <StatusGlyph :status="status" :size="13" />
-      </span>
-      <span class="flex-1 text-left truncate">{{ currentLabel }}</span>
-      <span
-        class="material-symbols-outlined text-[18px] text-outline transition-transform"
-        :class="open ? 'rotate-180' : ''"
-        >expand_more</span
-      >
-    </button>
-
-    <button
-      v-else
       ref="triggerEl"
       type="button"
       class="w-4 h-4 flex items-center justify-center rounded-full transition-colors"
@@ -65,13 +40,16 @@
           :aria-selected="opt.value === status"
           @click.stop="select(opt.value)"
         >
+          <!-- Icono de estado de tarea -->
           <span
             class="w-4 h-4 flex items-center justify-center shrink-0"
             :class="optionIconClass(opt.value)"
           >
             <StatusGlyph :status="opt.value" />
           </span>
+          <!-- Texto del estado de tarea -->
           <span class="flex-1">{{ opt.label }}</span>
+          <!-- Icono de check condicional al estado seleccionado -->
           <span
             v-if="opt.value === status"
             class="material-symbols-outlined text-[14px] text-primary"
@@ -98,12 +76,7 @@ const OPTIONS = [
 
 const props = defineProps({
   taskId: { type: [Number, String], required: true },
-  status: { type: String, required: true },
-  variant: {
-    type: String,
-    default: 'glyph',
-    validator: (v) => ['glyph', 'field'].includes(v)
-  }
+  status: { type: String, required: true }
 })
 
 const tasks = useTasksStore()
@@ -143,7 +116,7 @@ function placeMenu() {
   const trigger = triggerEl.value
   if (!trigger) return
   const rect = trigger.getBoundingClientRect()
-  const menuW = props.variant === 'field' ? Math.max(184, rect.width) : 184
+  const menuW = 184
   const menuH = OPTIONS.length * 32 + 8
   const pad = 8
   let top = rect.bottom + 4
@@ -156,8 +129,7 @@ function placeMenu() {
   }
   menuStyle.value = {
     top: `${top}px`,
-    left: `${left}px`,
-    width: props.variant === 'field' ? `${menuW}px` : undefined
+    left: `${left}px`
   }
 }
 
