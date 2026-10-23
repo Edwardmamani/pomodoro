@@ -1,5 +1,9 @@
 const { getConnection } = require('../db/connection')
-const { localDay, addDaysLocal } = require('../lib/date')
+const {
+  localDay,
+  addDaysLocal,
+  calculateUrgencyFromDueDate
+} = require('../lib/date')
 
 const SELECT_WITH_TAGS = `
   SELECT t.*, GROUP_CONCAT(g.name, ',') AS tags
@@ -25,12 +29,73 @@ function derivePriorityLabel(score) {
 }
 
 class TaskModel {
+  constructor() {
+    this.lastSyncDay = null
+  }
+
   get db() {
     return getConnection()
   }
 
   static calculatePriorityScore(impact, urgency, effort, dependencies, risk) {
     return calculatePriorityScore(impact, urgency, effort, dependencies, risk)
+  }
+
+  static calculateUrgencyFromDueDate(dueDate, today) {
+    return calculateUrgencyFromDueDate(dueDate, today)
+  }
+
+  needsDailySync() {
+    return this.lastSyncDay !== localDay()
+  }
+
+  syncDailyUrgencies(force = false) {
+    const today = localDay()
+    if (!force && this.lastSyncDay === today) return
+
+    const db = this.db
+    const tableExists = db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tasks'"
+      )
+      .get()
+    if (!tableExists) return
+
+    this.lastSyncDay = today
+
+    const openTasks = db
+      .prepare(
+        `SELECT id, due_date, impact, urgency, effort, dependencies, risk, priority_score
+         FROM tasks
+         WHERE status NOT IN ('done', 'cancelled') AND due_date IS NOT NULL`
+      )
+      .all()
+
+    if (!openTasks.length) return
+
+    const updateStmt = db.prepare(`
+      UPDATE tasks
+      SET urgency = ?, priority_score = ?, updated_at = ?
+      WHERE id = ?
+    `)
+
+    const now = new Date().toISOString()
+    const tx = db.transaction(() => {
+      for (const t of openTasks) {
+        const newUrg = calculateUrgencyFromDueDate(t.due_date, today)
+        const newScore = calculatePriorityScore(
+          t.impact,
+          newUrg,
+          t.effort,
+          t.dependencies,
+          t.risk
+        )
+        if (newUrg !== t.urgency || newScore !== t.priority_score) {
+          updateStmt.run(newUrg, newScore, now, t.id)
+        }
+      }
+    })
+    tx()
   }
 
   static map(row) {
@@ -71,6 +136,7 @@ class TaskModel {
   }
 
   list(filters = {}) {
+    this.syncDailyUrgencies()
     const clauses = []
     const params = {}
 
@@ -140,6 +206,7 @@ class TaskModel {
   }
 
   getById(id) {
+    this.syncDailyUrgencies()
     const row = this.db
       .prepare(`${SELECT_WITH_TAGS} WHERE t.id = ? GROUP BY t.id`)
       .get(id)
@@ -161,15 +228,19 @@ class TaskModel {
     estimated,
     tags,
     impact = 3,
-    urgency = 3,
+    urgency,
     effort = 3,
     dependencies = 1,
     risk = 1
   }) {
     const db = this.db
     const now = new Date().toISOString()
+    const today = localDay()
+    const cleanDueDate = dueDate ? String(dueDate).trim() : null
     const imp = Math.max(1, Math.min(5, Number(impact) || 3))
-    const urg = Math.max(1, Math.min(5, Number(urgency) || 3))
+    const urg = cleanDueDate
+      ? calculateUrgencyFromDueDate(cleanDueDate, today)
+      : (urgency !== undefined ? Math.max(1, Math.min(5, Number(urgency) || 1)) : 1)
     const eff = Math.max(1, Math.min(5, Number(effort) || 3))
     const dep = Math.max(1, Math.min(5, Number(dependencies) || 1))
     const rsk = Math.max(1, Math.min(5, Number(risk) || 1))
@@ -191,7 +262,7 @@ class TaskModel {
           title,
           status || 'todo',
           prio,
-          dueDate || null,
+          cleanDueDate,
           Number(estimated) || 0,
           imp,
           urg,
@@ -229,14 +300,23 @@ class TaskModel {
     if (!existing) return
 
     const now = new Date().toISOString()
+    const today = localDay()
+    const targetDueDate =
+      dueDate !== undefined
+        ? (dueDate ? String(dueDate).trim() : null)
+        : existing.due_date
+
     const imp =
       impact !== undefined
         ? Math.max(1, Math.min(5, Number(impact) || 3))
         : existing.impact
-    const urg =
-      urgency !== undefined
-        ? Math.max(1, Math.min(5, Number(urgency) || 3))
-        : existing.urgency
+
+    const urg = targetDueDate
+      ? calculateUrgencyFromDueDate(targetDueDate, today)
+      : (urgency !== undefined
+          ? Math.max(1, Math.min(5, Number(urgency) || 1))
+          : (existing.urgency || 1))
+
     const eff =
       effort !== undefined
         ? Math.max(1, Math.min(5, Number(effort) || 3))
@@ -249,6 +329,7 @@ class TaskModel {
       risk !== undefined
         ? Math.max(1, Math.min(5, Number(risk) || 1))
         : existing.risk
+
     const score = calculatePriorityScore(imp, urg, eff, dep, rsk)
     const prio = priority !== undefined ? priority : derivePriorityLabel(score)
 
@@ -268,7 +349,7 @@ class TaskModel {
         title,
         status,
         prio,
-        dueDate,
+        targetDueDate,
         estimated,
         imp,
         urg,

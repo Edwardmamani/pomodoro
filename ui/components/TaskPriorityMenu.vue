@@ -45,7 +45,7 @@
         </div>
 
         <!-- Formula display -->
-        <div class="px-2.5 py-1 rounded-lg bg-black/40 border border-white/5 font-label-mono-sm text-on-surface-variant text-[10.5px] text-center">
+        <div class="hidden px-2.5 py-1 rounded-lg bg-black/40 border border-white/5 font-label-mono-sm text-on-surface-variant text-[10.5px] text-center">
           ({{ draft.impact }}×{{ draft.urgency }} + {{ draft.dependencies }}×{{ draft.risk }}) / {{ draft.effort }} = <strong class="text-white">{{ liveScore.toFixed(2) }}</strong>
         </div>
 
@@ -66,16 +66,23 @@
             </div>
           </div>
 
-          <!-- Urgencia -->
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-on-surface-variant font-medium">U · Urgencia</span>
+          <!-- Urgencia (Dinámica según fecha de finalización) -->
+          <div class="flex items-center justify-between text-xs hidden">
+            <div class="flex flex-col">
+              <div class="flex items-center gap-1">
+                <span class="text-on-surface-variant font-medium">U · Urgencia</span>
+                <span class="text-[9px] px-1 py-0.2 rounded bg-primary/20 text-primary font-semibold">Dinámica</span>
+              </div>
+              <span class="text-[9.5px] text-on-surface-variant/70">{{ menuUrgencyHint }}</span>
+            </div>
             <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
               <button
                 v-for="v in [1, 2, 3, 4, 5]"
                 :key="'u-' + v"
                 type="button"
                 class="w-6 h-5 rounded font-label-mono-sm text-[11px] font-medium transition-colors"
-                :class="draft.urgency === v ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                :class="draft.urgency === v ? 'bg-primary text-white shadow-sm ring-1 ring-white/20' : 'text-on-surface-variant hover:text-white'"
+                :title="task?.due_date ? 'Calculada según fecha de finalización' : 'Sin fecha límite'"
                 @click="setVar('urgency', v)"
               >{{ v }}</button>
             </div>
@@ -144,6 +151,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useTasksStore } from '@/stores/tasks.store'
+import { getUrgencyHint } from '@/lib/urgency'
 
 const props = defineProps({
   taskId: { type: [Number, String], required: true },
@@ -154,6 +162,8 @@ const tasks = useTasksStore()
 const open = ref(false)
 const triggerEl = ref(null)
 const menuStyle = ref({})
+
+const menuUrgencyHint = computed(() => getUrgencyHint(props.task?.due_date))
 
 const draft = reactive({
   impact: 3,

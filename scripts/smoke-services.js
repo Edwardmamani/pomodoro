@@ -95,6 +95,95 @@ if (todoTasks[0].id !== created.data.id) {
   throw new Error(`La tarea con mayor puntaje debe ser la primera en 'todo': esperado ${created.data.id}, obtenido ${todoTasks[0].id}`)
 }
 
+// 4.1 Test de Urgencia Dinámica calculada por fecha de finalización
+const { localDay, addDaysLocal } = require('../electron-main/lib/date')
+const today = localDay()
+const tomorrow = addDaysLocal(today, 1)
+const in3Days = addDaysLocal(today, 3)
+const in6Days = addDaysLocal(today, 6)
+const in15Days = addDaysLocal(today, 15)
+
+const taskToday = taskController.create(null, {
+  title: 'Vence hoy',
+  due_date: today,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskToday.data.urgency !== 5) {
+  throw new Error(`Urgencia esperada 5 para vence hoy, obtenido: ${taskToday.data.urgency}`)
+}
+
+const taskTomorrow = taskController.create(null, {
+  title: 'Vence mañana',
+  due_date: tomorrow,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskTomorrow.data.urgency !== 4) {
+  throw new Error(`Urgencia esperada 4 para vence mañana, obtenido: ${taskTomorrow.data.urgency}`)
+}
+
+const task3Days = taskController.create(null, {
+  title: 'Vence en 3 días',
+  due_date: in3Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task3Days.data.urgency !== 3) {
+  throw new Error(`Urgencia esperada 3 para vence en 3 días, obtenido: ${task3Days.data.urgency}`)
+}
+
+const task6Days = taskController.create(null, {
+  title: 'Vence en 6 días',
+  due_date: in6Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task6Days.data.urgency !== 2) {
+  throw new Error(`Urgencia esperada 2 para vence en 6 días, obtenido: ${task6Days.data.urgency}`)
+}
+
+const task15Days = taskController.create(null, {
+  title: 'Vence en 15 días',
+  due_date: in15Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task15Days.data.urgency !== 1) {
+  throw new Error(`Urgencia esperada 1 para vence en 15 días, obtenido: ${task15Days.data.urgency}`)
+}
+
+// Test de edición: Al cambiar fecha de finalización, se recalcula urgencia y score
+const taskEdit = taskController.create(null, {
+  title: 'Tarea para editar fecha',
+  due_date: in15Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskEdit.data.urgency !== 1) throw new Error('Urgencia inicial debe ser 1')
+
+const updatedTask = taskController.update(null, taskEdit.data.id, {
+  due_date: today
+})
+if (updatedTask.data.urgency !== 5) {
+  throw new Error(`Urgencia tras editar debe ser 5, obtenido: ${updatedTask.data.urgency}`)
+}
+if (updatedTask.data.priority_score !== 11.00) {
+  throw new Error(`Score tras editar fecha esperado 11.00, obtenido: ${updatedTask.data.priority_score}`)
+}
+
 // 5. Activar tarea para el cronómetro
 const active = taskController.setActive(null, created.data.id)
 if (!active.ok) throw new Error('setActive falló')

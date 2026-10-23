@@ -156,30 +156,54 @@ El orden de atención de las tareas no es subjetivo ni arbitrario. Se fundamenta
 
 $$\vec{t} = [I, U, E, D, R]$$
 
-### 6.1 Fórmula y normalización en `TaskModel`
+### 6.1 Cálculo Dinámico de Urgencia ($U$) por Fecha de Finalización
+
+La urgencia $U \in [1, 5]$ no es un valor estático fijado arbitrariamente; **se calcula y actualiza dinámicamente según la proximidad de la fecha límite (`due_date`)**:
+
+$$\Delta d = \text{Días}(\text{due\_date}) - \text{Días}(\text{hoy})$$
+
+| Condición temporal | Urgencia $U$ | Significado |
+| ------------------ | :----------: | ----------- |
+| $\Delta d \le 0$ (hoy o vencida) | **5** | Inmediata / Vence hoy o plazo expirado |
+| $\Delta d = 1$ (mañana) | **4** | Muy urgente / Próxima a vencer |
+| $2 \le \Delta d \le 3$ (2 a 3 días) | **3** | Urgencia moderada |
+| $4 \le \Delta d \le 7$ (esta semana) | **2** | Próxima en la semana |
+| $\Delta d > 7$ o sin fecha límite | **1** | Plazo holgado / Sin urgencia |
+
+### 6.2 Ciclo de Recálculo y Sincronización Diaria
+
+La urgencia $U$ y el puntaje $P$ se recalculan en tres momentos clave del ciclo de vida:
+1. **Creación de tarea:** Al ingresar una nueva tarea con fecha de finalización, se evalúa de inmediato su urgencia $U$ y se calcula su $P$.
+2. **Edición de tarea:** Cuando el usuario o un cliente MCP modifica `due_date`, `TaskModel.update` recalcula automáticamente $U$ y $P$.
+3. **Cambio de día (Recálculo Diario):**
+   - Al invocar `taskModel.list()` o al iniciar la aplicación, `syncDailyUrgencies()` compara la fecha actual con `lastSyncDay`.
+   - Si cambió de día, se ejecuta una transacción atómica que actualiza la urgencia y el puntaje de todas las tareas abiertas con fecha límite.
+   - Adicionalmente, un temporizador periódico en segundo plano (`TaskController`) verifica el cambio de día cada 10 minutos y emite el evento `changed` para refrescar la interfaz de usuario en vivo.
+
+### 6.3 Fórmula y normalización en `TaskModel`
 
 ```javascript
 // TaskModel.js
-static calculatePriorityScore({ impact = 3, urgency = 3, effort = 2, dependencies = 1, risk = 2 } = {}) {
-  const i = Math.max(1, Math.min(5, Number(impact) || 1))
+static calculatePriorityScore(impact, urgency, effort, dependencies, risk) {
+  const i = Math.max(1, Math.min(5, Number(impact) || 3))
   const u = Math.max(1, Math.min(5, Number(urgency) || 1))
-  const e = Math.max(1, Math.min(5, Number(effort) || 1)) // Salvaguarda división por cero
+  const e = Math.max(1, Math.min(5, Number(effort) || 3)) // Salvaguarda división por cero
   const d = Math.max(1, Math.min(5, Number(dependencies) || 1))
   const r = Math.max(1, Math.min(5, Number(risk) || 1))
 
   const score = ((i * u) + (d * r)) / e
-  return Math.round(score * 100) / 100
+  return Number(score.toFixed(2))
 }
 ```
 
-### 6.2 Derivación de nivel cualitativo
+### 6.4 Derivación de nivel cualitativo
 
 Para mantener coherencia con interfaces compactas, el puntaje $P$ se clasifica en tres bandas:
-- **Alta (`high`):** $P \ge 15.0$ (Badge Rojo/Naranja Apple)
-- **Media (`medium`):** $6.0 \le P < 15.0$ (Badge Azul Apple)
-- **Baja (`low`):** $P < 6.0$ (Badge Gris translúcido Apple)
+- **Alta (`high`):** $P \ge 12.0$ (Badge Rojo/Naranja Apple)
+- **Media (`medium`):** $4.0 \le P < 12.0$ (Badge Azul Apple)
+- **Baja (`low`):** $P < 4.0$ (Badge Gris translúcido Apple)
 
-### 6.3 Ordenamiento en consultas
+### 6.5 Ordenamiento en consultas
 
 Las tareas en estado abierto se ordenan en base a la consulta:
 ```sql

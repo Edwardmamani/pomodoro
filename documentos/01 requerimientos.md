@@ -42,7 +42,12 @@ $$\vec{t} = [I, U, E, D, R]$$
 
 Donde cada variable toma un valor numérico entero en la escala del **1 al 5**:
 1. **$I$ (Impacto):** ¿Cuánto valor aporta completar esta tarea? (1 = Mínimo valor, 5 = Transformacional / Crítico).
-2. **$U$ (Urgencia):** ¿Qué tan cerca está la fecha límite? (1 = Plazo lejano / Sin prisa, 5 = Inmediata / Vence hoy).
+2. **$U$ (Urgencia) — *Calculada y Dinámica*:** Determinada automáticamente de acuerdo a la proximidad de la fecha de finalización (`due_date`). Se recalcula **cada día** y **cada vez que una tarea es creada o editada**:
+   - $U = 5$: Vencida (días restantes $\le 0$) o vence hoy. Urgencia inmediata máxima.
+   - $U = 4$: Vence mañana (1 día restante).
+   - $U = 3$: Vence en 2 a 3 días.
+   - $U = 2$: Vence esta semana (4 a 7 días).
+   - $U = 1$: Vence en más de 7 días o sin fecha de finalización asignada.
 3. **$E$ (Esfuerzo):** ¿Cuántos recursos, tiempo o energía requiere? (1 = Mínimo esfuerzo, 5 = Gran complejidad / Alto esfuerzo). Se restringe a $E \ge 1$ para evitar indeterminaciones.
 4. **$D$ (Dependencias):** ¿Otras tareas están bloqueadas por esta? (1 = Ninguna tarea dependiente, 5 = Bloquea múltiples entregables).
 5. **$R$ (Riesgo):** ¿Qué pasa si NO lo hago ahora? (1 = Sin consecuencias graves, 5 = Consecuencias catastróficas).
@@ -53,7 +58,8 @@ $$P = \frac{(I \times U) + (D \times R)}{E}$$
 
 - **Criterio de ordenación:** La tarea con el puntaje $P$ mayor es la más importante. La lista de tareas pendientes se ordena de forma descendente por $P$.
 - **Rango de puntuación:** Desde un mínimo de $0.40$ (cuando $I=1, U=1, D=1, R=1, E=5$) hasta un máximo de $50.00$ (cuando $I=5, U=5, D=5, R=5, E=1$).
-- **Ajuste dinámico:** La UI permite ajustar los 5 componentes mediante controles segmentados y visualizar en tiempo real la variación del puntaje $P$ y su clasificación correspondiente (Alta: $P \ge 15$, Media: $6 \le P < 15$, Baja: $P < 6$).
+- **Recálculo dinámico automático:** Dado que la urgencia $U$ varía dinámicamente con el paso de los días hacia la fecha de finalización, el puntaje de prioridad $P$ de las tareas abiertas se actualiza automáticamente día a día, elevando la importancia de las tareas conforme se acerca su fecha de entrega.
+- **Ajuste y previsualización:** La UI permite afinar los componentes del vector mediante controles segmentados y visualizar en tiempo real la variación del puntaje $P$ y su clasificación correspondiente (Alta: $P \ge 15$, Media: $6 \le P < 15$, Baja: $P < 6$).
 
 ### Gestión de tareas
 

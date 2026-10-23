@@ -82,35 +82,41 @@
 
 ## Épica E2 — Gestión de tareas con Priorización Vectorial
 
-### HU-05 — Crear tarea con Vector de Priorización (MVP)
+### HU-05 — Crear tarea con Vector de Priorización y Urgencia Dinámica (MVP)
 
 **Como** usuario,  
 **quiero** registrar una tarea evaluándola con un vector de 5 variables $\vec{t} = [I, U, E, D, R]$,  
-**para** que la aplicación calcule automáticamente su puntaje de prioridad $P$.
+**para** que la aplicación calcule automáticamente su urgencia según la fecha límite y su puntaje de prioridad $P$.
 
 **Criterios de aceptación**
 - **Given** pulso "Nueva tarea",  
   **When** se abre el modal estilo Apple Sheet,  
-  **Then** puedo ingresar el título, fecha límite opcional, etiquetas y seleccionar con controles segmentados (1 al 5) los valores para:
-    - $I$ (Impacto): 1 a 5
-    - $U$ (Urgencia): 1 a 5
-    - $E$ (Esfuerzo): 1 a 5 (mínimo 1)
-    - $D$ (Dependencias): 1 a 5
-    - $R$ (Riesgo): 1 a 5
-- **Given** modifico cualquier variable en el modal,  
-  **When** cambio el valor,  
-  **Then** veo un preview dinámico del cálculo con la fórmula $P = \frac{(I \times U) + (D \times R)}{E}$ y su badge de clasificación (Alta, Media, Baja).
+  **Then** puedo ingresar el título, fecha de finalización opcional, etiquetas y seleccionar con controles segmentados (1 al 5) los valores para $I$, $E$, $D$ y $R$.
+- **Given** selecciono o modifico la fecha de finalización (`due_date`),  
+  **When** cambia la fecha,  
+  **Then** la urgencia $U$ se actualiza de forma automática e inmediata:
+    - Vencida o vence hoy $\rightarrow U = 5$.
+    - Vence mañana $\rightarrow U = 4$.
+    - Vence en 2 a 3 días $\rightarrow U = 3$.
+    - Vence en 4 a 7 días $\rightarrow U = 2$.
+    - Vence en más de 7 días o sin fecha $\rightarrow U = 1$.
+- **Given** veo el panel de variables,  
+  **When** observo la fila de urgencia,  
+  **Then** se visualiza un badge "Dinámica" junto con un texto explicativo del motivo del valor actual (ej. "Vence en 2d · U = 3").
 - **Given** guardo la tarea con título válido,  
   **When** se confirma la creación,  
-  **Then** se persiste en SQLite con su `priority_score` calculado y aparece ordenada adecuadamente en la lista.
+  **Then** se persiste en SQLite con su `urgency` calculada dinámicamente y su `priority_score` correspondiente, insertándose en la posición adecuada de la lista.
 
-### HU-06 — Ordenación automática por Puntaje de Prioridad (MVP)
+### HU-06 — Ordenación automática y Recálculo Diario de Urgencias (MVP)
 
 **Como** usuario,  
-**quiero** que mis tareas pendientes se ordenen automáticamente de mayor a menor puntaje de prioridad ($P$),  
-**para** saber de inmediato cuál es la tarea más crítica que debo atender primero.
+**quiero** que mis tareas pendientes se ordenen automáticamente por puntaje $P$ y que sus urgencias se recalculen cada día,  
+**para** que la lista refleje siempre el impacto del paso del tiempo hacia las fechas límite.
 
 **Criterios de aceptación**
+- **Given** cambia el día del calendario mientras la app está abierta o al iniciar el sistema,  
+  **When** se detecta el nuevo día,  
+  **Then** la aplicación recalcula la urgencia $U$ y el puntaje $P$ de todas las tareas abiertas según la nueva distancia temporal a su fecha de entrega.
 - **Given** tengo múltiples tareas pendientes en estado "Por hacer",  
   **When** consulto la lista,  
   **Then** la primera tarea mostrada es la que posee el mayor valor de $P = \frac{(I \times U) + (D \times R)}{E}$.
@@ -128,20 +134,23 @@
 - **Given** veo una tarea en la lista,  
   **When** hago clic en su badge de prioridad (que muestra el puntaje $P$),  
   **Then** se despliega un popover estilo Apple con los selectores segmentados para $I$, $U$, $E$, $D$ y $R$.
-- **Given** cambio una variable (p. ej. Urgencia sube de 2 a 5),  
+- **Given** abro el popover,  
+  **When** miro el control de Urgencia $U$,  
+  **Then** se indica que es dinámica y refleja la fecha de finalización actual de la tarea.
+- **Given** cambio una variable (p. ej. Impacto o Riesgo),  
   **When** pulso la nueva opción,  
   **Then** el puntaje $P$ se recalcula al instante, se persiste en la base de datos y la posición de la tarea se reordena en la lista si corresponde.
 
-### HU-08 — Editar y eliminar tareas (MVP)
+### HU-08 — Editar y eliminar tareas con recálculo de urgencia (MVP)
 
 **Como** usuario,  
-**quiero** modificar detalles o eliminar tareas existentes,  
-**para** mantener mi lista de trabajo actualizada y libre de elementos obsoletos.
+**quiero** modificar detalles de una tarea o eliminarla,  
+**para** mantener mi lista de trabajo actualizada y con prioridades vigentes.
 
 **Criterios de aceptación**
-- **Given** abro la edición de una tarea,  
-  **When** modifico título, fecha límite o etiquetas y guardo,  
-  **Then** los datos se actualizan y la fecha `updated_at` se renueva.
+- **Given** edito una tarea y cambio su fecha de finalización (`due_date`),  
+  **When** se guarda la modificación,  
+  **Then** la urgencia $U$ y el puntaje $P$ se recalculan automáticamente de acuerdo a la nueva fecha y se actualiza `updated_at`.
 - **Given** pulso eliminar sobre una tarea,  
   **When** confirmo la acción,  
   **Then** la tarea se borra del sistema junto con sus etiquetas asociadas; las notas asociadas se limpian del disco.

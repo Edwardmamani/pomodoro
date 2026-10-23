@@ -22,6 +22,20 @@ class TaskController {
     this.settings = new SettingsModel()
     this.notes = new NoteModel()
     this.bus = new EventEmitter()
+
+    // Sincronización de urgencias dinámicas al iniciar
+    this.tasks.syncDailyUrgencies()
+
+    // Verificación periódica para recalcular urgencias al cambiar de día
+    this.dailySyncTimer = setInterval(() => {
+      if (this.tasks.needsDailySync()) {
+        this.tasks.syncDailyUrgencies()
+        this.emitChanged()
+      }
+    }, 10 * 60 * 1000)
+    if (this.dailySyncTimer && typeof this.dailySyncTimer.unref === 'function') {
+      this.dailySyncTimer.unref()
+    }
   }
 
   list(_event, filters) {

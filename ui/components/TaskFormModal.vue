@@ -74,7 +74,7 @@
             </div>
 
             <!-- Formula display -->
-            <div class="px-3 py-1.5 rounded-lg bg-black/30 border border-white/5 font-label-mono-sm text-on-surface-variant text-[11px] flex items-center justify-between">
+            <div class="hidden px-3 py-1.5 rounded-lg bg-black/30 border border-white/5 font-label-mono-sm text-on-surface-variant text-[11px] flex items-center justify-between">
               <span>Fórmula: P = (I×U + D×R) / E</span>
               <span class="text-white/90">
                 ({{ form.impact }}×{{ form.urgency }} + {{ form.dependencies }}×{{ form.risk }}) / {{ form.effort }}
@@ -101,11 +101,16 @@
                 </div>
               </div>
 
-              <!-- Urgencia -->
-              <div class="flex items-center justify-between text-xs">
+              <!-- Urgencia (Dinámica según fecha de finalización) -->
+              <div class="flex items-center justify-between text-xs hidden">
                 <div class="flex flex-col">
-                  <span class="text-white font-medium">U · Urgencia</span>
-                  <span class="text-on-surface-variant text-[10px]">Cercanía de fecha límite</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-white font-medium">U · Urgencia</span>
+                    <span class="px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-primary/20 text-primary border border-primary/30">
+                      Dinámica
+                    </span>
+                  </div>
+                  <span class="text-on-surface-variant text-[10px]">{{ urgencyHint }}</span>
                 </div>
                 <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
                   <button
@@ -113,7 +118,8 @@
                     :key="'u-' + val"
                     type="button"
                     class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
-                    :class="form.urgency === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    :class="form.urgency === val ? 'bg-primary text-white shadow-sm ring-1 ring-white/20' : 'text-on-surface-variant hover:text-white'"
+                    :title="form.due_date ? 'Calculada automáticamente según fecha de finalización' : 'Sin fecha límite'"
                     @click="form.urgency = val"
                   >{{ val }}</button>
                 </div>
@@ -319,6 +325,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useTasksStore } from '@/stores/tasks.store'
 import { suggestTags } from '@/lib/levenshtein'
 import { tagDotColor } from '@/lib/tag-color'
+import { calculateUrgencyFromDueDate, getUrgencyHint } from '@/lib/urgency'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['created'])
@@ -337,15 +344,24 @@ const form = reactive({
   title: '',
   due_date: '',
   impact: 3,
-  urgency: 3,
+  urgency: 1,
   effort: 3,
   dependencies: 1,
   risk: 1
 })
 
+const urgencyHint = computed(() => getUrgencyHint(form.due_date))
+
+watch(
+  () => form.due_date,
+  (val) => {
+    form.urgency = calculateUrgencyFromDueDate(val)
+  }
+)
+
 const computedScore = computed(() => {
   const i = Math.max(1, Math.min(5, Number(form.impact) || 3))
-  const u = Math.max(1, Math.min(5, Number(form.urgency) || 3))
+  const u = Math.max(1, Math.min(5, Number(form.urgency) || 1))
   const e = Math.max(1, Math.min(5, Number(form.effort) || 3))
   const d = Math.max(1, Math.min(5, Number(form.dependencies) || 1))
   const r = Math.max(1, Math.min(5, Number(form.risk) || 1))
@@ -384,7 +400,7 @@ function resetForm() {
   form.title = ''
   form.due_date = ''
   form.impact = 3
-  form.urgency = 3
+  form.urgency = 1
   form.effort = 3
   form.dependencies = 1
   form.risk = 1

@@ -103,7 +103,7 @@ Almacena las unidades de trabajo y los valores del vector $\vec{t} = [I, U, E, D
 | `status` | TEXT | NOT NULL DEFAULT `'todo'` | Estado: `blocked`, `todo`, `in_progress`, `done`, `cancelled`. |
 | `priority` | TEXT | NOT NULL DEFAULT `'medium'` | Nivel cualitativo derivado: `high`, `medium`, `low`. |
 | `impact` | INTEGER | NOT NULL DEFAULT 3 | $I$ (Impacto): Valor que aporta completar la tarea (1-5). |
-| `urgency` | INTEGER | NOT NULL DEFAULT 3 | $U$ (Urgencia): Cercanía de la fecha límite (1-5). |
+| `urgency` | INTEGER | NOT NULL DEFAULT 1 | $U$ (Urgencia): Calculada dinámicamente según la proximidad de `due_date` y el día actual (1-5). |
 | `effort` | INTEGER | NOT NULL DEFAULT 2 | $E$ (Esfuerzo): Recursos/tiempo/energía requeridos (1-5, $\ge 1$). |
 | `dependencies` | INTEGER | NOT NULL DEFAULT 1 | $D$ (Dependencias): Otras tareas bloqueadas por esta (1-5). |
 | `risk` | INTEGER | NOT NULL DEFAULT 2 | $R$ (Riesgo): Consecuencias de no realizarla ahora (1-5). |
