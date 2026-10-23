@@ -1,17 +1,12 @@
 const { getConnection } = require('./connection')
 
 const DEFAULT_SETTINGS = {
-  focus_minutes: '25',
-  short_break_minutes: '5',
-  long_break_minutes: '15',
-  pomodoros_until_long_break: '4',
   sound_enabled: 'true',
   notifications_enabled: 'true',
   locale: 'es',
   mcp_enabled: 'false',
   sound_volume: '75',
   do_not_disturb_auto: 'false',
-  attenuate_on_break: 'false',
   active_playlist_id: '',
   last_playlist_id: '',
   active_task_id: ''
@@ -33,6 +28,12 @@ function runMigrations() {
         estimated_pomodoros INTEGER NOT NULL DEFAULT 0,
         completed_pomodoros INTEGER NOT NULL DEFAULT 0,
         accumulated_ms INTEGER NOT NULL DEFAULT 0,
+        impact INTEGER NOT NULL DEFAULT 3,
+        urgency INTEGER NOT NULL DEFAULT 3,
+        effort INTEGER NOT NULL DEFAULT 3,
+        dependencies INTEGER NOT NULL DEFAULT 1,
+        risk INTEGER NOT NULL DEFAULT 1,
+        priority_score REAL NOT NULL DEFAULT 3.33,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -51,7 +52,7 @@ function runMigrations() {
       CREATE TABLE IF NOT EXISTS pomodoro_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         period_type TEXT NOT NULL
-          CHECK (period_type IN ('focus','short_break','long_break')),
+          CHECK (period_type IN ('focus','short_break','long_break','stopwatch')),
         started_at TEXT NOT NULL,
         ended_at TEXT,
         duration_ms INTEGER NOT NULL,
@@ -80,6 +81,7 @@ function runMigrations() {
 
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority_score ON tasks(priority_score);
       CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON pomodoro_sessions(started_at);
@@ -88,6 +90,24 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON task_tags(tag_id);
     `)
     db.pragma('user_version = 1')
+  }
+
+  if (version < 2) {
+    const columns = db.pragma('table_info(tasks)').map((c) => c.name)
+    if (!columns.includes('impact')) {
+      db.exec(`
+        ALTER TABLE tasks ADD COLUMN impact INTEGER NOT NULL DEFAULT 3;
+        ALTER TABLE tasks ADD COLUMN urgency INTEGER NOT NULL DEFAULT 3;
+        ALTER TABLE tasks ADD COLUMN effort INTEGER NOT NULL DEFAULT 3;
+        ALTER TABLE tasks ADD COLUMN dependencies INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE tasks ADD COLUMN risk INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE tasks ADD COLUMN priority_score REAL NOT NULL DEFAULT 3.33;
+      `)
+    }
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority_score ON tasks(priority_score);
+    `)
+    db.pragma('user_version = 2')
   }
 
   const insert = db.prepare(

@@ -37,7 +37,7 @@
           <div @click.stop>
             <TaskPriorityMenu
               :task-id="task.id"
-              :priority="task.priority"
+              :task="task"
             />
           </div>
         </div>
@@ -162,29 +162,14 @@
           </button>
 
           <span class="pointer-events-none">·</span>
-          <span class="inline-flex items-center gap-0.5" @click.stop>
-            <span :class="isActive ? 'text-primary' : ''">{{
-              task.completed_pomodoros
-            }}</span>
-            <span>/</span>
-            <input
-              type="number"
-              min="0"
-              max="99"
-              class="w-8 h-5 px-0.5 bg-transparent border-0 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:outline-none focus:ring-0"
-              :class="isActive ? 'text-primary' : ''"
-              :value="task.estimated_pomodoros"
-              title="Pomodoros estimados"
-              @change="saveEstimated($event.target.value)"
-            />
-            <span :class="isActive ? 'text-primary' : ''">pomos</span>
-          </span>
-          <span class="pointer-events-none">·</span>
           <span
-            class="pointer-events-none"
-            :class="isActive ? 'text-primary' : ''"
-            >{{ formatAccumulated(liveAccumulated) }}</span
+            class="inline-flex items-center gap-1 font-label-mono-sm font-medium"
+            :class="isActive ? 'text-primary' : 'text-on-surface-variant'"
+            title="Tiempo acumulado de concentración"
           >
+            <span class="material-symbols-outlined text-[13px]">timer</span>
+            <span>{{ formatAccumulated(liveAccumulated) }}</span>
+          </span>
         </div>
       </div>
     </div>

@@ -8,22 +8,58 @@ const SELECT_WITH_TAGS = `
   LEFT JOIN tags g ON g.id = tt.tag_id
 `
 
+function calculatePriorityScore(impact, urgency, effort, dependencies, risk) {
+  const i = Math.max(1, Math.min(5, Number(impact) || 3))
+  const u = Math.max(1, Math.min(5, Number(urgency) || 3))
+  const e = Math.max(1, Math.min(5, Number(effort) || 3))
+  const d = Math.max(1, Math.min(5, Number(dependencies) || 1))
+  const r = Math.max(1, Math.min(5, Number(risk) || 1))
+  const score = ((i * u) + (d * r)) / e
+  return Number(score.toFixed(2))
+}
+
+function derivePriorityLabel(score) {
+  if (score >= 12) return 'high'
+  if (score >= 4) return 'medium'
+  return 'low'
+}
+
 class TaskModel {
   get db() {
     return getConnection()
   }
 
+  static calculatePriorityScore(impact, urgency, effort, dependencies, risk) {
+    return calculatePriorityScore(impact, urgency, effort, dependencies, risk)
+  }
+
   static map(row) {
     if (!row) return null
+    const impact = row.impact != null ? Number(row.impact) : 3
+    const urgency = row.urgency != null ? Number(row.urgency) : 3
+    const effort = row.effort != null ? Number(row.effort) : 3
+    const dependencies = row.dependencies != null ? Number(row.dependencies) : 1
+    const risk = row.risk != null ? Number(row.risk) : 1
+    const priorityScore =
+      row.priority_score != null
+        ? Number(row.priority_score)
+        : calculatePriorityScore(impact, urgency, effort, dependencies, risk)
+
     return {
       id: row.id,
       title: row.title,
       status: row.status,
-      priority: row.priority,
+      priority: row.priority || derivePriorityLabel(priorityScore),
       due_date: row.due_date,
       estimated_pomodoros: row.estimated_pomodoros,
       completed_pomodoros: row.completed_pomodoros,
       accumulated_ms: row.accumulated_ms,
+      impact,
+      urgency,
+      effort,
+      dependencies,
+      risk,
+      priority_score: priorityScore,
       created_at: row.created_at,
       updated_at: row.updated_at,
       tags: row.tags
@@ -95,11 +131,7 @@ class TaskModel {
           WHEN 'done' THEN 3
           ELSE 4
         END,
-        CASE t.priority
-          WHEN 'high' THEN 0
-          WHEN 'medium' THEN 1
-          ELSE 2
-        END,
+        t.priority_score DESC,
         t.created_at DESC
     `
       )
@@ -121,30 +153,105 @@ class TaskModel {
       .map((r) => r.name)
   }
 
-  create({ title, status, priority, dueDate, estimated, tags }) {
+  create({
+    title,
+    status,
+    priority,
+    dueDate,
+    estimated,
+    tags,
+    impact = 3,
+    urgency = 3,
+    effort = 3,
+    dependencies = 1,
+    risk = 1
+  }) {
     const db = this.db
     const now = new Date().toISOString()
+    const imp = Math.max(1, Math.min(5, Number(impact) || 3))
+    const urg = Math.max(1, Math.min(5, Number(urgency) || 3))
+    const eff = Math.max(1, Math.min(5, Number(effort) || 3))
+    const dep = Math.max(1, Math.min(5, Number(dependencies) || 1))
+    const rsk = Math.max(1, Math.min(5, Number(risk) || 1))
+    const score = calculatePriorityScore(imp, urg, eff, dep, rsk)
+    const prio = priority || derivePriorityLabel(score)
+
     const tx = db.transaction(() => {
       const taskId = db
         .prepare(
           `
         INSERT INTO tasks (
           title, status, priority, due_date, estimated_pomodoros,
-          completed_pomodoros, accumulated_ms, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+          completed_pomodoros, accumulated_ms, impact, urgency, effort,
+          dependencies, risk, priority_score, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
-        .run(title, status, priority, dueDate, estimated, now, now)
-        .lastInsertRowid
+        .run(
+          title,
+          status || 'todo',
+          prio,
+          dueDate || null,
+          Number(estimated) || 0,
+          imp,
+          urg,
+          eff,
+          dep,
+          rsk,
+          score,
+          now,
+          now
+        ).lastInsertRowid
       this.linkTags(taskId, tags)
       return taskId
     })
     return tx()
   }
 
-  update(id, { title, status, priority, dueDate, estimated, tags }) {
+  update(
+    id,
+    {
+      title,
+      status,
+      priority,
+      dueDate,
+      estimated,
+      tags,
+      impact,
+      urgency,
+      effort,
+      dependencies,
+      risk
+    }
+  ) {
     const db = this.db
+    const existing = this.getById(id)
+    if (!existing) return
+
     const now = new Date().toISOString()
+    const imp =
+      impact !== undefined
+        ? Math.max(1, Math.min(5, Number(impact) || 3))
+        : existing.impact
+    const urg =
+      urgency !== undefined
+        ? Math.max(1, Math.min(5, Number(urgency) || 3))
+        : existing.urgency
+    const eff =
+      effort !== undefined
+        ? Math.max(1, Math.min(5, Number(effort) || 3))
+        : existing.effort
+    const dep =
+      dependencies !== undefined
+        ? Math.max(1, Math.min(5, Number(dependencies) || 1))
+        : existing.dependencies
+    const rsk =
+      risk !== undefined
+        ? Math.max(1, Math.min(5, Number(risk) || 1))
+        : existing.risk
+    const score = calculatePriorityScore(imp, urg, eff, dep, rsk)
+    const prio = priority !== undefined ? priority : derivePriorityLabel(score)
+
     const tx = db.transaction(() => {
       if (status === 'in_progress') {
         this.demoteInProgress(id, now)
@@ -153,10 +260,25 @@ class TaskModel {
         `
         UPDATE tasks SET
           title = ?, status = ?, priority = ?, due_date = ?,
-          estimated_pomodoros = ?, updated_at = ?
+          estimated_pomodoros = ?, impact = ?, urgency = ?, effort = ?,
+          dependencies = ?, risk = ?, priority_score = ?, updated_at = ?
         WHERE id = ?
       `
-      ).run(title, status, priority, dueDate, estimated, now, id)
+      ).run(
+        title,
+        status,
+        prio,
+        dueDate,
+        estimated,
+        imp,
+        urg,
+        eff,
+        dep,
+        rsk,
+        score,
+        now,
+        id
+      )
 
       if (Array.isArray(tags)) {
         db.prepare('DELETE FROM task_tags WHERE task_id = ?').run(id)
@@ -208,18 +330,15 @@ class TaskModel {
       link.run(taskId, tagId)
     }
   }
-  /** Siguiente pendiente: mayor prioridad y, en empate, la entrega más próxima. */
+
+  /** Siguiente pendiente: mayor puntaje de prioridad P y, en empate, la entrega más próxima. */
   getNextTask(exceptId) {
     return this.db
       .prepare(
         `SELECT id FROM tasks
          WHERE status = 'todo' AND id != ?
          ORDER BY
-           CASE priority
-             WHEN 'high' THEN 0
-             WHEN 'medium' THEN 1
-             ELSE 2
-           END,
+           priority_score DESC,
            due_date IS NULL,
            due_date ASC,
            created_at ASC

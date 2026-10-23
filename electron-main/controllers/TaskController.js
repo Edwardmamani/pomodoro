@@ -6,7 +6,7 @@ const SettingsModel = require('../models/SettingsModel')
 const NoteModel = require('../models/NoteModel')
 
 const CSV_HEADER =
-  'id,title,status,priority,due_date,estimated_pomodoros,completed_pomodoros,accumulated_ms,tags'
+  'id,title,status,priority,priority_score,impact,urgency,effort,dependencies,risk,due_date,accumulated_ms,tags'
 
 function csvEscape(value) {
   const s = String(value ?? '')
@@ -40,10 +40,15 @@ class TaskController {
     const id = this.tasks.create({
       title,
       status: input.status || 'todo',
-      priority: input.priority || 'medium',
+      priority: input.priority,
       dueDate: input.due_date || null,
       estimated: Number(input.estimated_pomodoros) || 0,
-      tags: Array.isArray(input.tags) ? input.tags : []
+      tags: Array.isArray(input.tags) ? input.tags : [],
+      impact: input.impact,
+      urgency: input.urgency,
+      effort: input.effort,
+      dependencies: input.dependencies,
+      risk: input.risk
     })
     this.emitChanged()
     return { ok: true, data: this.tasks.getById(id) }
@@ -62,13 +67,18 @@ class TaskController {
     this.tasks.update(id, {
       title,
       status,
-      priority: input.priority ?? existing.priority,
+      priority: input.priority,
       dueDate: input.due_date !== undefined ? input.due_date : existing.due_date,
       estimated:
         input.estimated_pomodoros !== undefined
           ? Number(input.estimated_pomodoros)
           : existing.estimated_pomodoros,
-      tags: input.tags
+      tags: input.tags,
+      impact: input.impact,
+      urgency: input.urgency,
+      effort: input.effort,
+      dependencies: input.dependencies,
+      risk: input.risk
     })
 
     if (status === 'in_progress') {
@@ -144,9 +154,13 @@ class TaskController {
               csvEscape(t.title),
               t.status,
               t.priority,
+              t.priority_score,
+              t.impact,
+              t.urgency,
+              t.effort,
+              t.dependencies,
+              t.risk,
               t.due_date || '',
-              t.estimated_pomodoros,
-              t.completed_pomodoros,
               t.accumulated_ms,
               csvEscape((t.tags || []).join('|'))
             ].join(',')

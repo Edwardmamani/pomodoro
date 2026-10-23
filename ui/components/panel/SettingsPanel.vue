@@ -34,41 +34,19 @@
           >
           <span
             class="font-label-mono-sm uppercase tracking-wider text-outline"
-            >Temporizador</span
+            >Cronómetro de Enfoque</span
           >
         </div>
         <div
-          class="bg-surface-container p-3 rounded-xl border border-outline-variant/30 flex flex-col gap-2.5"
+          class="bg-surface-container p-3.5 rounded-xl border border-outline-variant/30 flex flex-col gap-2"
         >
-          <DurationRow
-            label="Concentración"
-            :value="draft.focus_minutes"
-            @dec="bump('focus_minutes', -1)"
-            @inc="bump('focus_minutes', 1)"
-          />
-          <DurationRow
-            label="Descanso corto"
-            :value="draft.short_break_minutes"
-            @dec="bump('short_break_minutes', -1)"
-            @inc="bump('short_break_minutes', 1)"
-          />
-          <DurationRow
-            label="Descanso largo"
-            :value="draft.long_break_minutes"
-            @dec="bump('long_break_minutes', -1)"
-            @inc="bump('long_break_minutes', 1)"
-          />
-          <div
-            class="pt-2 border-t border-outline-variant/30 flex items-center justify-between text-xs"
-          >
-            <span class="text-on-surface-variant font-body-sm text-[12px]"
-              >Intervalo descanso largo</span
-            >
-            <span
-              class="font-label-mono-sm text-primary bg-primary/10 px-2 py-0.5 rounded-full"
-              >Cada {{ draft.pomodoros_until_long_break }} pomos</span
-            >
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-on-surface font-body-sm font-medium">Modo de tiempo</span>
+            <span class="font-label-mono-sm text-primary bg-primary/10 px-2.5 py-0.5 rounded-full font-medium">Libre continuo</span>
           </div>
+          <p class="font-body-sm text-[12px] text-on-surface-variant leading-relaxed">
+            El cronómetro registra el tiempo trabajado de forma continua y lo atribuye a la tarea seleccionada.
+          </p>
         </div>
       </div>
 
@@ -147,12 +125,6 @@
               class="font-label-mono-sm text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded"
               >MVP</span
             >
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="font-body-sm text-on-surface"
-              >Atenuar en descanso</span
-            >
-            <ToggleSwitch v-model="draft.attenuate_on_break" />
           </div>
         </div>
       </div>

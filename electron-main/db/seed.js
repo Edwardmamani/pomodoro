@@ -10,8 +10,9 @@ function runSeed() {
   const insertTask = db.prepare(`
     INSERT INTO tasks (
       title, status, priority, due_date, estimated_pomodoros,
-      completed_pomodoros, accumulated_ms, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      completed_pomodoros, accumulated_ms, impact, urgency, effort,
+      dependencies, risk, priority_score, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const link = db.prepare(
     'INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)'
@@ -36,6 +37,12 @@ function runSeed() {
       4,
       2,
       23 * 60 * 1000,
+      4,
+      4,
+      2,
+      2,
+      3,
+      11.0,
       now,
       now
     ).lastInsertRowid
@@ -49,6 +56,12 @@ function runSeed() {
       2,
       1,
       15 * 60 * 1000,
+      3,
+      3,
+      3,
+      2,
+      2,
+      4.33,
       now,
       now
     ).lastInsertRowid
@@ -62,6 +75,12 @@ function runSeed() {
       2,
       2,
       45 * 60 * 1000,
+      2,
+      2,
+      3,
+      1,
+      1,
+      1.67,
       now,
       now
     ).lastInsertRowid
@@ -75,6 +94,12 @@ function runSeed() {
       3,
       0,
       0,
+      5,
+      4,
+      2,
+      3,
+      4,
+      16.0,
       now,
       now
     ).lastInsertRowid
@@ -88,6 +113,12 @@ function runSeed() {
       2,
       2,
       30 * 60 * 1000,
+      3,
+      2,
+      2,
+      1,
+      1,
+      3.5,
       now,
       now
     ).lastInsertRowid

@@ -2,47 +2,49 @@
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/70 p-4 backdrop-blur-[2px]"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md"
       role="presentation"
       @click.self="close"
       @keydown.escape="close"
     >
       <div
-        class="w-full max-w-md rounded-xl border border-outline-variant/30 bg-surface-container shadow-xl"
+        class="w-full max-w-lg rounded-2xl border border-white/10 bg-[#1e1e20] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-form-title"
       >
+        <!-- Apple Sheet Header -->
         <div
-          class="flex items-center justify-between px-5 py-4 border-b border-outline-variant/30"
+          class="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#252528]/80 shrink-0"
         >
           <div class="flex items-center gap-2.5">
             <div
-              class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center"
+              class="w-7 h-7 rounded-lg bg-primary/20 text-primary flex items-center justify-center font-medium"
             >
               <span class="material-symbols-outlined text-[18px]">add_task</span>
             </div>
             <h2
               id="task-form-title"
-              class="font-headline-md text-[18px] text-on-surface tracking-tight"
+              class="font-headline-md text-[18px] text-white tracking-tight"
             >
               Nueva tarea
             </h2>
           </div>
           <button
             type="button"
-            class="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
+            class="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-on-surface-variant hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             title="Cerrar"
             @click="close"
           >
-            <span class="material-symbols-outlined text-[18px]">close</span>
+            <span class="material-symbols-outlined text-[16px]">close</span>
           </button>
         </div>
 
-        <form class="px-5 py-4 flex flex-col gap-3.5" @submit.prevent="submit">
+        <form class="px-6 py-4 flex flex-col gap-4 overflow-y-auto min-h-0" @submit.prevent="submit">
+          <!-- Título -->
           <label class="flex flex-col gap-1.5">
-            <span class="font-label-mono-sm uppercase tracking-wider text-outline"
-              >Título</span
+            <span class="font-label-mono-sm uppercase tracking-wider text-on-surface-variant text-[11px]"
+              >Título de la tarea</span
             >
             <input
               ref="titleInput"
@@ -50,76 +52,163 @@
               type="text"
               required
               maxlength="200"
-              placeholder="¿Qué quieres hacer?"
-              class="h-10 px-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-on-surface font-body-md placeholder:text-outline focus:outline-none focus:border-primary/50 transition-colors"
+              placeholder="¿Qué vas a realizar?"
+              class="h-10 px-3.5 rounded-xl bg-[#28282b] border border-white/10 text-white font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 transition-colors"
             />
           </label>
 
-          <div class="grid grid-cols-2 gap-3">
-            <label class="flex flex-col gap-1.5">
-              <span
-                class="font-label-mono-sm uppercase tracking-wider text-outline"
-                >Prioridad</span
+          <!-- Vector de Priorización Apple HIG -->
+          <div class="p-3.5 rounded-xl bg-[#242426] border border-white/10 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="font-label-mono text-primary font-semibold text-[13px]">Vector de Prioridad</span>
+                <span class="font-label-mono-sm text-on-surface-variant text-[11px]">t⃗ = [I, U, E, D, R]</span>
+              </div>
+              <div
+                class="px-2.5 py-1 rounded-full font-label-mono text-xs font-semibold flex items-center gap-1.5"
+                :class="scoreBadgeClass"
               >
-              <select
-                v-model="form.priority"
-                class="h-10 px-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-on-surface font-body-sm focus:outline-none focus:border-primary/50"
-              >
-                <option value="high">Alta</option>
-                <option value="medium">Media</option>
-                <option value="low">Baja</option>
-              </select>
-            </label>
-            <label class="flex flex-col gap-1.5">
-              <span
-                class="font-label-mono-sm uppercase tracking-wider text-outline"
-                >Pomodoros est.</span
-              >
-              <input
-                v-model.number="form.estimated_pomodoros"
-                type="number"
-                min="0"
-                max="99"
-                class="h-10 px-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-on-surface font-body-sm focus:outline-none focus:border-primary/50"
-              />
-            </label>
+                <span>Puntaje P:</span>
+                <span class="text-[13px] font-bold">{{ computedScore.toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <!-- Formula display -->
+            <div class="px-3 py-1.5 rounded-lg bg-black/30 border border-white/5 font-label-mono-sm text-on-surface-variant text-[11px] flex items-center justify-between">
+              <span>Fórmula: P = (I×U + D×R) / E</span>
+              <span class="text-white/90">
+                ({{ form.impact }}×{{ form.urgency }} + {{ form.dependencies }}×{{ form.risk }}) / {{ form.effort }}
+              </span>
+            </div>
+
+            <!-- 5 Variables Steppers / Segmented controls -->
+            <div class="flex flex-col gap-2.5 pt-1">
+              <!-- Impacto -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">I · Impacto</span>
+                  <span class="text-on-surface-variant text-[10px]">Valor aportado</span>
+                </div>
+                <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
+                  <button
+                    v-for="val in [1, 2, 3, 4, 5]"
+                    :key="'i-' + val"
+                    type="button"
+                    class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
+                    :class="form.impact === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    @click="form.impact = val"
+                  >{{ val }}</button>
+                </div>
+              </div>
+
+              <!-- Urgencia -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">U · Urgencia</span>
+                  <span class="text-on-surface-variant text-[10px]">Cercanía de fecha límite</span>
+                </div>
+                <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
+                  <button
+                    v-for="val in [1, 2, 3, 4, 5]"
+                    :key="'u-' + val"
+                    type="button"
+                    class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
+                    :class="form.urgency === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    @click="form.urgency = val"
+                  >{{ val }}</button>
+                </div>
+              </div>
+
+              <!-- Esfuerzo (Denominador E >= 1) -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">E · Esfuerzo</span>
+                  <span class="text-on-surface-variant text-[10px]">Tiempo y recursos requeridos</span>
+                </div>
+                <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
+                  <button
+                    v-for="val in [1, 2, 3, 4, 5]"
+                    :key="'e-' + val"
+                    type="button"
+                    class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
+                    :class="form.effort === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    @click="form.effort = val"
+                  >{{ val }}</button>
+                </div>
+              </div>
+
+              <!-- Dependencias -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">D · Dependencias</span>
+                  <span class="text-on-surface-variant text-[10px]">Otras tareas bloqueadas por esta</span>
+                </div>
+                <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
+                  <button
+                    v-for="val in [1, 2, 3, 4, 5]"
+                    :key="'d-' + val"
+                    type="button"
+                    class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
+                    :class="form.dependencies === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    @click="form.dependencies = val"
+                  >{{ val }}</button>
+                </div>
+              </div>
+
+              <!-- Riesgo -->
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-col">
+                  <span class="text-white font-medium">R · Riesgo</span>
+                  <span class="text-on-surface-variant text-[10px]">Consecuencias de postergar</span>
+                </div>
+                <div class="inline-flex rounded-lg bg-[#1a1a1c] p-0.5 border border-white/10">
+                  <button
+                    v-for="val in [1, 2, 3, 4, 5]"
+                    :key="'r-' + val"
+                    type="button"
+                    class="w-7 h-6 rounded-md font-label-mono-sm text-xs font-medium transition-colors"
+                    :class="form.risk === val ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'"
+                    @click="form.risk = val"
+                  >{{ val }}</button>
+                </div>
+              </div>
+            </div>
           </div>
 
+          <!-- Fecha límite -->
           <label class="flex flex-col gap-1.5">
-            <span class="font-label-mono-sm uppercase tracking-wider text-outline"
+            <span class="font-label-mono-sm uppercase tracking-wider text-on-surface-variant text-[11px]"
               >Fecha de finalización</span
             >
             <div class="relative">
               <span
-                class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline pointer-events-none"
+                class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-on-surface-variant pointer-events-none"
                 >event</span
               >
               <input
                 v-model="form.due_date"
                 type="date"
-                class="w-full h-10 pl-10 pr-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-on-surface font-body-sm focus:outline-none focus:border-primary/50 [color-scheme:dark]"
+                class="w-full h-10 pl-10 pr-3 rounded-xl bg-[#28282b] border border-white/10 text-white font-body-sm focus:outline-none focus:border-primary [color-scheme:dark]"
               />
             </div>
-            <span class="font-label-mono-sm text-outline"
-              >Opcional · formato local YYYY-MM-DD</span
-            >
           </label>
 
+          <!-- Etiquetas -->
           <div class="flex flex-col gap-1.5">
             <span
               id="tag-field-label"
-              class="font-label-mono-sm uppercase tracking-wider text-outline"
+              class="font-label-mono-sm uppercase tracking-wider text-on-surface-variant text-[11px]"
               >Etiquetas</span
             >
             <div class="relative">
               <div
-                class="min-h-10 px-2 py-1.5 rounded-lg bg-surface-container-low border border-outline-variant/30 flex flex-wrap items-center gap-1.5 focus-within:border-primary/50 transition-colors cursor-text"
+                class="min-h-10 px-2 py-1.5 rounded-xl bg-[#28282b] border border-white/10 flex flex-wrap items-center gap-1.5 focus-within:border-primary transition-colors cursor-text"
                 @click="focusTagInput"
               >
                 <span
                   v-for="(name, index) in selectedTags"
                   :key="`${name}-${index}`"
-                  class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md bg-surface-container-high text-on-surface font-body-sm max-w-full"
+                  class="inline-flex items-center gap-1.5 pl-2 pr-1 py-0.5 rounded-lg bg-white/10 text-white font-body-sm max-w-full"
                 >
                   <span
                     class="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -129,14 +218,11 @@
                   <span class="truncate">{{ name }}</span>
                   <button
                     type="button"
-                    class="w-5 h-5 rounded flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-highest transition-colors flex-shrink-0"
+                    class="w-4 h-4 rounded-full flex items-center justify-center text-on-surface-variant hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
                     :title="`Quitar ${name}`"
-                    :aria-label="`Quitar etiqueta ${name}`"
                     @click.stop="removeTag(index)"
                   >
-                    <span class="material-symbols-outlined text-[14px]"
-                      >close</span
-                    >
+                    <span class="material-symbols-outlined text-[12px]">close</span>
                   </button>
                 </span>
 
@@ -159,10 +245,10 @@
                   :placeholder="
                     selectedTags.length
                       ? 'Añadir otra…'
-                      : 'Separadas por espacio · Ej. Idiomas'
+                      : 'Separadas por espacio · Ej. Urgente'
                   "
                   autocomplete="off"
-                  class="flex-1 min-w-[7rem] h-7 px-1 bg-transparent border-0 text-on-surface font-body-sm placeholder:text-outline focus:outline-none focus:ring-0"
+                  class="flex-1 min-w-[7rem] h-7 px-1 bg-transparent border-0 text-white font-body-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-0"
                   @focus="tagFocused = true"
                   @blur="onTagBlur"
                   @keydown="onTagKeydown"
@@ -174,7 +260,7 @@
                 v-if="showSuggestions"
                 id="tag-suggestions"
                 role="listbox"
-                class="absolute left-0 right-0 top-[calc(100%+4px)] z-10 max-h-40 overflow-y-auto rounded-lg border border-outline-variant/40 bg-surface-container-high shadow-lg py-1"
+                class="absolute left-0 right-0 top-[calc(100%+4px)] z-10 max-h-40 overflow-y-auto rounded-xl border border-white/10 bg-[#252528] shadow-xl py-1 backdrop-blur-md"
               >
                 <li
                   v-for="(name, index) in suggestions"
@@ -185,8 +271,8 @@
                   class="px-3 py-2 font-body-sm cursor-pointer transition-colors flex items-center gap-2"
                   :class="
                     index === activeSuggestion
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-on-surface hover:bg-surface-container-highest'
+                      ? 'bg-primary/20 text-primary'
+                      : 'text-white hover:bg-white/10'
                   "
                   @mousedown.prevent="applySuggestion(name)"
                   @mouseenter="activeSuggestion = index"
@@ -202,19 +288,20 @@
             </div>
           </div>
 
+          <!-- Bottom Actions (Apple style) -->
           <div
-            class="pt-2 mt-1 border-t border-outline-variant/30 flex items-center justify-end gap-2"
+            class="pt-3 mt-1 border-t border-white/10 flex items-center justify-end gap-3 shrink-0"
           >
             <button
               type="button"
-              class="h-10 px-4 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-label-md transition-colors"
+              class="h-9 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-label-md transition-colors cursor-pointer"
               @click="close"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              class="h-10 px-4 rounded-xl bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-md flex items-center gap-1.5 shadow-sm transition-colors"
+              class="h-9 px-5 rounded-xl bg-primary hover:bg-primary-fixed-dim text-white font-label-md flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
               :disabled="submitting || !form.title.trim()"
             >
               <span class="material-symbols-outlined text-[18px]">check</span>
@@ -248,9 +335,29 @@ const activeSuggestion = ref(-1)
 
 const form = reactive({
   title: '',
-  priority: 'medium',
-  estimated_pomodoros: 1,
-  due_date: ''
+  due_date: '',
+  impact: 3,
+  urgency: 3,
+  effort: 3,
+  dependencies: 1,
+  risk: 1
+})
+
+const computedScore = computed(() => {
+  const i = Math.max(1, Math.min(5, Number(form.impact) || 3))
+  const u = Math.max(1, Math.min(5, Number(form.urgency) || 3))
+  const e = Math.max(1, Math.min(5, Number(form.effort) || 3))
+  const d = Math.max(1, Math.min(5, Number(form.dependencies) || 1))
+  const r = Math.max(1, Math.min(5, Number(form.risk) || 1))
+  return Number((((i * u) + (d * r)) / e).toFixed(2))
+})
+
+const scoreBadgeClass = computed(() => {
+  const s = computedScore.value
+  if (s >= 12) return 'bg-error/20 text-error border border-error/30'
+  if (s >= 6) return 'bg-secondary/20 text-secondary border border-secondary/30'
+  if (s >= 3) return 'bg-primary/20 text-primary border border-primary/30'
+  return 'bg-white/10 text-on-surface-variant border border-white/10'
 })
 
 const suggestions = computed(() =>
@@ -275,9 +382,12 @@ async function loadKnownTags() {
 
 function resetForm() {
   form.title = ''
-  form.priority = 'medium'
-  form.estimated_pomodoros = 1
   form.due_date = ''
+  form.impact = 3
+  form.urgency = 3
+  form.effort = 3
+  form.dependencies = 1
+  form.risk = 1
   selectedTags.value = []
   tagQuery.value = ''
   tagFocused.value = false
@@ -317,35 +427,30 @@ function applySuggestion(name) {
 }
 
 function onTagInput() {
-  // Espacio confirma el tag actual y abre espacio para el siguiente
-  if (/\s/.test(tagQuery.value)) {
-    const parts = tagQuery.value.split(/\s+/)
-    const last = parts.pop() ?? ''
-    for (const part of parts) commitTag(part)
-    tagQuery.value = last
+  const q = tagQuery.value
+  if (q.endsWith(' ') || q.endsWith(',')) {
+    const raw = q.slice(0, -1).trim()
+    if (raw) commitTag(raw)
   }
 }
 
 function onTagBlur() {
   setTimeout(() => {
+    if (tagQuery.value.trim()) {
+      commitTag(tagQuery.value)
+    }
     tagFocused.value = false
-    activeSuggestion.value = -1
-  }, 120)
+  }, 180)
 }
 
 function onTagKeydown(e) {
   if (e.key === 'Backspace' && !tagQuery.value && selectedTags.value.length) {
-    e.preventDefault()
     selectedTags.value.pop()
     return
   }
 
-  if (!showSuggestions.value) {
-    if (e.key === 'ArrowDown' && suggestions.value.length) {
-      tagFocused.value = true
-      activeSuggestion.value = 0
-      e.preventDefault()
-    } else if (e.key === 'Enter' && tagQuery.value.trim()) {
+  if (e.key === 'Tab') {
+    if (tagQuery.value.trim()) {
       e.preventDefault()
       commitTag(tagQuery.value)
     }
@@ -385,9 +490,12 @@ async function submit() {
     const tags = [...selectedTags.value]
     const res = await tasks.create({
       title,
-      priority: form.priority,
-      estimated_pomodoros: Number(form.estimated_pomodoros) || 0,
       due_date: form.due_date || null,
+      impact: form.impact,
+      urgency: form.urgency,
+      effort: form.effort,
+      dependencies: form.dependencies,
+      risk: form.risk,
       tags,
       status: 'todo'
     })

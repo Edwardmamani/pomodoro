@@ -115,6 +115,7 @@
                 class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
                 >{{ task.tags[0] }}</span
               >
+              <span class="px-1.5 py-0.5 rounded-full bg-white/5 text-on-surface-variant text-[10px]">P: {{ Number(task.priority_score || 0).toFixed(1) }}</span>
               <span v-if="task.due_date">·</span>
               <span v-if="task.due_date">{{ formatDueDate(task.due_date) }}</span>
               <span>·</span>

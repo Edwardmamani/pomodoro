@@ -1,115 +1,116 @@
 <template>
   <div
-    class="h-full w-full flex flex-col items-center justify-between min-h-0 px-1"
+    class="h-full w-full flex flex-col items-center justify-center min-h-0 px-2"
   >
-    <div
-      class="mt-1 flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low text-on-surface-variant"
-    >
-      <span
-        class="w-2 h-2 rounded-full bg-primary"
-        :class="{ 'animate-pulse': timer.isRunning }"
-      ></span>
-      <span class="font-label-md">Concentración libre</span>
-      <span
-        class="font-label-mono-sm px-1.5 py-0.5 rounded-full bg-primary/20 text-primary"
-        >{{ timer.state.completedFocusToday }}</span
-      >
-    </div>
-
-    <!-- Ring -->
-    <div class="relative flex items-center justify-center my-4">
-      <div class="w-[320px] h-[320px] relative flex items-center justify-center">
-        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 320 320">
+    <!-- Apple Watch / iOS Stopwatch Dial -->
+    <div class="relative flex items-center justify-center my-auto">
+      <div class="w-[340px] h-[340px] relative flex items-center justify-center">
+        <!-- SVG Ring -->
+        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 340 340">
+          <!-- Background track -->
           <circle
-            class="stroke-surface-container-high"
-            cx="160"
-            cy="160"
+            class="stroke-[#242426]"
+            cx="170"
+            cy="170"
             fill="transparent"
-            r="138"
+            r="148"
             stroke-width="3"
           />
+          <!-- Subtle tick dashes -->
           <circle
-            class="text-outline-variant/30"
-            cx="160"
-            cy="160"
-            fill="transparent"
-            r="126"
-            stroke="currentColor"
-            stroke-dasharray="2 12"
-            stroke-width="1"
-          />
-          <circle
-            class="stroke-primary transition-all duration-700 ease-out"
-            cx="160"
-            cy="160"
+            class="stroke-white/10"
+            cx="170"
+            cy="170"
             fill="transparent"
             r="138"
+            stroke-dasharray="2 10"
+            stroke-width="1.5"
+          />
+          <!-- Active glowing progress arc -->
+          <circle
+            class="transition-all duration-300 ease-linear"
+            :class="timer.isRunning ? 'stroke-primary' : (timer.isPaused ? 'stroke-secondary' : 'stroke-white/20')"
+            cx="170"
+            cy="170"
+            fill="transparent"
+            r="148"
             :stroke-dasharray="circumference"
             :stroke-dashoffset="strokeDashoffset"
             stroke-linecap="round"
-            stroke-width="4.5"
+            stroke-width="4"
           />
         </svg>
+
+        <!-- Dial Content -->
         <div
-          class="absolute inset-0 flex flex-col items-center justify-center text-center"
+          class="absolute inset-0 flex flex-col items-center justify-center text-center select-none"
         >
+          <!-- State Pill -->
           <div
-            class="flex items-center gap-1.5 mb-1 px-2.5 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant"
+            class="flex items-center gap-1.5 mb-2 px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-on-surface-variant backdrop-blur-md"
           >
             <span
-              class="material-symbols-outlined text-[14px] text-primary"
-              style="font-variation-settings: 'FILL' 1"
-              >timer</span
-            >
-            <span class="font-label-mono-sm uppercase tracking-wider"
-              >Cronómetro</span
+              class="w-1.5 h-1.5 rounded-full"
+              :class="timer.isRunning ? 'bg-tertiary animate-pulse' : (timer.isPaused ? 'bg-secondary' : 'bg-outline')"
+            ></span>
+            <span class="font-label-mono-sm uppercase tracking-wider text-[11px] font-medium"
+              >{{ statusLabel }}</span
             >
           </div>
+
+          <!-- Giant Digits -->
           <span
-            class="timer-digits text-on-surface"
-            :class="{ 'timer-digits--long': isLongDisplay }"
-            >{{ display }}</span
-          >
-          <div class="flex items-center gap-2 mt-1 text-on-surface-variant">
-            <span class="font-label-mono text-outline"
-              >{{ timer.state.completedFocusToday }} FOCUS HOY</span
+            class="apple-timer-digits text-white font-extralight tracking-tight"
+            :class="{ 'apple-timer-digits--long': isLongDisplay }"
+          >{{ display }}</span>
+
+          <div class="flex items-center gap-2 mt-2 text-on-surface-variant">
+            <span class="font-label-mono text-on-surface-variant/80 text-[11px]"
+              >{{ timer.state.completedFocusToday }} ENFOQUES HOY</span
             >
-            <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
-            <span class="font-label-mono text-primary">{{ statusLabel }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Controls -->
-    <div class="flex items-center gap-4 my-2">
+    <!-- Apple iOS / watchOS Circular Controls -->
+    <div class="flex items-center justify-center gap-8 mt-4 mb-2">
+      <!-- Reset / Stop Button -->
       <button
         type="button"
-        class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all active:scale-95 shadow-sm"
-        title="Reiniciar cronómetro"
+        class="w-16 h-16 rounded-full flex flex-col items-center justify-center bg-[#2c2c2e] text-[#aeaeb2] border border-white/10 hover:bg-[#3a3a3c] hover:text-white transition-all active:scale-95 shadow-md disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+        :disabled="timer.state.status === 'idle'"
+        title="Reiniciar a cero"
         @click="timer.reset()"
       >
-        <span class="material-symbols-outlined text-[20px]">restart_alt</span>
+        <span class="material-symbols-outlined text-[22px]">restart_alt</span>
+        <span class="text-[10px] font-label-md mt-0.5 font-medium">Reiniciar</span>
       </button>
+
+      <!-- Main Play / Pause Button -->
       <button
         type="button"
-        class="h-12 px-8 flex items-center gap-2.5 rounded-xl bg-primary text-on-primary font-label-md shadow-md hover:bg-primary-fixed-dim transition-all"
+        class="w-20 h-20 rounded-full flex flex-col items-center justify-center transition-all active:scale-95 shadow-lg border cursor-pointer"
+        :class="toggleButtonClasses"
         @click="timer.toggle()"
       >
         <span
-          class="material-symbols-outlined text-[20px]"
+          class="material-symbols-outlined text-[28px]"
           style="font-variation-settings: 'FILL' 1"
-          >{{ toggleIcon }}</span
-        >
-        <span>{{ toggleLabel }}</span>
+        >{{ toggleIcon }}</span>
+        <span class="text-[11px] font-label-md mt-0.5 font-semibold">{{ toggleLabel }}</span>
       </button>
+
+      <!-- Stop & Save Session Button -->
       <button
         type="button"
-        class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-all active:scale-95 shadow-sm"
-        title="Detener cronómetro"
+        class="w-16 h-16 rounded-full flex flex-col items-center justify-center bg-[#2c2c2e] text-[#aeaeb2] border border-white/10 hover:bg-[#3a3a3c] hover:text-error transition-all active:scale-95 shadow-md disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+        :disabled="timer.state.status === 'idle'"
+        title="Detener y guardar tiempo"
         @click="timer.stop()"
       >
-        <span class="material-symbols-outlined text-[20px]">stop</span>
+        <span class="material-symbols-outlined text-[22px]">stop</span>
+        <span class="text-[10px] font-label-md mt-0.5 font-medium">Detener</span>
       </button>
     </div>
   </div>
@@ -121,37 +122,18 @@ import { useTimerStore } from '@/stores/timer.store'
 
 const timer = useTimerStore()
 
-const circumference = computed(() => timer.state.circumference || 867)
+const circumference = computed(() => 2 * Math.PI * 148) // 930
 const strokeDashoffset = computed(() => {
   const c = circumference.value
-  if (!timer.isStopwatch) {
-    return c
-  }
   const p = timer.state.progress || 0
   return c * (1 - p)
 })
 
-function formatElapsed(ms) {
-  const totalSec = Math.floor(Math.max(0, ms) / 1000)
-  const h = Math.floor(totalSec / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  if (h > 0) {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-const display = computed(() => {
-  if (timer.isStopwatch) return timer.state.display
-  // Panel fuera de vista en modo pomodoro
-  return formatElapsed(timer.state.elapsedMs || 0)
-})
-
+const display = computed(() => timer.state.display || '00:00')
 const isLongDisplay = computed(() => String(display.value || '').length > 5)
 
 const statusLabel = computed(() => {
-  if (timer.isRunning) return 'CRONÓMETRO'
+  if (timer.isRunning) return 'EN CURSO'
   if (timer.isPaused) return 'EN PAUSA'
   return 'LISTO'
 })
@@ -162,24 +144,31 @@ const toggleLabel = computed(() => {
   if (timer.isPaused) return 'Reanudar'
   return 'Iniciar'
 })
+
+const toggleButtonClasses = computed(() => {
+  if (timer.isRunning) {
+    return 'bg-[#3b2308] text-[#FF9F0A] border-[#FF9F0A]/40 hover:bg-[#4d2e0a]'
+  }
+  return 'bg-[#10301a] text-[#30D158] border-[#30D158]/40 hover:bg-[#153f22]'
+})
 </script>
 
 <style scoped>
-.timer-digits {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 88px;
-  line-height: 96px;
+.apple-timer-digits {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-size: 80px;
+  line-height: 86px;
   letter-spacing: -0.04em;
-  font-weight: 300;
   font-variant-numeric: tabular-nums;
-  max-width: 240px;
+  max-width: 290px;
   overflow: hidden;
   white-space: nowrap;
 }
 
-.timer-digits--long {
+.apple-timer-digits--long {
   font-size: 52px;
-  line-height: 56px;
+  line-height: 58px;
   letter-spacing: -0.03em;
 }
 </style>
+

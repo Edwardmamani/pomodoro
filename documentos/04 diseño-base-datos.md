@@ -1,18 +1,22 @@
-# Diseño de base de datos — Aplicación Pomodoro
+# Diseño de base de datos — Aplicación Focus (Cronómetro y Priorización Vectorial)
 
 **Motor:** SQLite 3  
 **Ubicación:** `{app.getPath('userData')}/pomodoro.db`  
-**Acceso:** solo desde el proceso Main (repositorio); el Renderer no abre la BD.  
+**Acceso:** Exclusivo desde el proceso Main a través de `sqlite3`; el Renderer nunca interactúa directamente con la base de datos.  
 **Referencias:** [01 requerimientos.md](01%20requerimientos.md), [02 historias-usuario.md](02%20historias-usuario.md), [03 diseño-arquitectura.md](03%20diseño-arquitectura.md).
 
-## 1. Principios
+---
 
-- Un usuario por instalación; sin tabla de cuentas en el MVP.
-- Claves enteras `INTEGER PRIMARY KEY` (rowid).
-- Fechas/horas en **ISO-8601 UTC** (`TEXT`) o epoch ms (`INTEGER`); la UI convierte a zona local del SO.
-- Enumeraciones como `TEXT` con valores controlados en la capa de servicio.
-- Soft-delete no requerido en MVP (borrado físico), salvo decisión futura.
-- Al eliminar una tarea: `pomodoro_sessions.task_id` pasa a `NULL` (ON DELETE SET NULL) para conservar historial de enfoque.
+## 1. Principios de persistencia
+
+- **Almacenamiento completamente local:** No requiere cuentas en la nube ni telemetría externa.
+- **Identificadores enteros:** Claves primarias numéricas `INTEGER PRIMARY KEY AUTOINCREMENT`.
+- **Fechas y horas:** Cadenas de texto en formato **ISO-8601 UTC** (`YYYY-MM-DDTHH:mm:ss.sssZ`).
+- **Control de versiones de esquema:** Gestionado mediante la tabla `schema_version` y comprobación con `PRAGMA user_version`.
+- **Integridad referencial:** Activada mediante `PRAGMA foreign_keys = ON;`.
+- **Eliminación en cascada:** Al borrar una tarea, sus vínculos en `task_tags` se eliminan en cascada (`ON DELETE CASCADE`), mientras que las sesiones históricas mantienen la integridad desvinculando la tarea (`ON DELETE SET NULL`).
+
+---
 
 ## 2. Diagrama entidad-relación
 
@@ -20,18 +24,22 @@
 erDiagram
   tasks ||--o{ task_tags : tiene
   tags ||--o{ task_tags : etiqueta
-  tasks ||--o{ pomodoro_sessions : asocia
-  playlists ||--o| playlists : ultima_activa_via_settings
+  tasks ||--o{ sessions : registra
+  playlists ||--o| settings : activa_via
 
   tasks {
     INTEGER id PK
     TEXT title
     TEXT status
     TEXT priority
+    INTEGER impact "1 a 5 (Impacto)"
+    INTEGER urgency "1 a 5 (Urgencia)"
+    INTEGER effort "1 a 5 (Esfuerzo)"
+    INTEGER dependencies "1 a 5 (Dependencias)"
+    INTEGER risk "1 a 5 (Riesgo)"
+    REAL priority_score "P = (I*U + D*R) / E"
     TEXT due_date
-    INTEGER estimated_pomodoros
-    INTEGER completed_pomodoros
-    INTEGER accumulated_ms
+    INTEGER accumulated_ms "Milisegundos medidos por cronómetro"
     TEXT created_at
     TEXT updated_at
   }
@@ -46,9 +54,9 @@ erDiagram
     INTEGER tag_id FK
   }
 
-  pomodoro_sessions {
+  sessions {
     INTEGER id PK
-    TEXT period_type
+    TEXT period_type "focus"
     TEXT started_at
     TEXT ended_at
     INTEGER duration_ms
@@ -58,7 +66,7 @@ erDiagram
 
   playlists {
     INTEGER id PK
-    TEXT service
+    TEXT service "spotify"
     TEXT name
     TEXT external_url
     TEXT external_id
@@ -80,268 +88,168 @@ erDiagram
   }
 ```
 
-## 3. Tablas
+---
 
-### 3.1 `schema_version`
+## 3. Definición de tablas
 
-Control de migraciones.
+### 3.1 `tasks` (Tareas con Vector de Priorización)
 
-| Columna | Tipo | Restricciones | Descripción |
-|---------|------|---------------|-------------|
-| version | INTEGER | NOT NULL | Versión actual del esquema (MVP = 1) |
-
-Se puede usar una sola fila, o la convención `PRAGMA user_version` además de esta tabla. **Decisión MVP:** `PRAGMA user_version` como fuente de verdad; tabla opcional de log de migraciones no obligatoria.
-
-### 3.2 `tasks`
+Almacena las unidades de trabajo y los valores del vector $\vec{t} = [I, U, E, D, R]$, junto con el resultado de la fórmula de prioridad $P$.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| id | INTEGER | PK, AUTOINCREMENT | Identificador |
-| title | TEXT | NOT NULL | Título |
-| status | TEXT | NOT NULL | `blocked` \| `todo` \| `in_progress` \| `done` \| `cancelled` |
-| priority | TEXT | NOT NULL DEFAULT `'medium'` | `high` \| `medium` \| `low` |
-| due_date | TEXT | NULL | Fecha límite `YYYY-MM-DD` (local interpretada) |
-| estimated_pomodoros | INTEGER | NOT NULL DEFAULT 0 | Estimación |
-| completed_pomodoros | INTEGER | NOT NULL DEFAULT 0 | Completados |
-| accumulated_ms | INTEGER | NOT NULL DEFAULT 0 | Tiempo de concentración acumulado |
-| created_at | TEXT | NOT NULL | ISO-8601 |
-| updated_at | TEXT | NOT NULL | ISO-8601 |
+| `id` | INTEGER | PK, AUTOINCREMENT | Identificador único de la tarea. |
+| `title` | TEXT | NOT NULL | Título descriptivo de la tarea. |
+| `status` | TEXT | NOT NULL DEFAULT `'todo'` | Estado: `blocked`, `todo`, `in_progress`, `done`, `cancelled`. |
+| `priority` | TEXT | NOT NULL DEFAULT `'medium'` | Nivel cualitativo derivado: `high`, `medium`, `low`. |
+| `impact` | INTEGER | NOT NULL DEFAULT 3 | $I$ (Impacto): Valor que aporta completar la tarea (1-5). |
+| `urgency` | INTEGER | NOT NULL DEFAULT 3 | $U$ (Urgencia): Cercanía de la fecha límite (1-5). |
+| `effort` | INTEGER | NOT NULL DEFAULT 2 | $E$ (Esfuerzo): Recursos/tiempo/energía requeridos (1-5, $\ge 1$). |
+| `dependencies` | INTEGER | NOT NULL DEFAULT 1 | $D$ (Dependencias): Otras tareas bloqueadas por esta (1-5). |
+| `risk` | INTEGER | NOT NULL DEFAULT 2 | $R$ (Riesgo): Consecuencias de no realizarla ahora (1-5). |
+| `priority_score` | REAL | NOT NULL DEFAULT 0.0 | Puntaje calculado: $P = \frac{(I \times U) + (D \times R)}{E}$. |
+| `due_date` | TEXT | NULL | Fecha límite en formato `YYYY-MM-DD`. |
+| `accumulated_ms` | INTEGER | NOT NULL DEFAULT 0 | Tiempo total dedicado medido por el cronómetro (en ms). |
+| `created_at` | TEXT | NOT NULL | Marca temporal ISO-8601 de creación. |
+| `updated_at` | TEXT | NOT NULL | Marca temporal ISO-8601 de última actualización. |
 
-**Mapeo UI (ES) ↔ valores**
-
-| UI | Valor BD |
-|----|----------|
-| Bloqueado | `blocked` |
-| Por hacer | `todo` |
-| En curso | `in_progress` |
-| Hecha | `done` |
-| Cancelada | `cancelled` |
-| Alta / Media / Baja | `high` / `medium` / `low` |
-
-### 3.3 `tags`
+### 3.2 `tags` (Etiquetas)
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| id | INTEGER | PK, AUTOINCREMENT | |
-| name | TEXT | NOT NULL, UNIQUE COLLATE NOCASE | Nombre etiqueta (p. ej. `english`) |
+| `id` | INTEGER | PK, AUTOINCREMENT | Identificador de la etiqueta. |
+| `name` | TEXT | NOT NULL, UNIQUE COLLATE NOCASE | Nombre de la etiqueta (ej: `frontend`, `urgente`). |
 
-### 3.4 `task_tags`
-
-| Columna | Tipo | Restricciones | Descripción |
-|---------|------|---------------|-------------|
-| task_id | INTEGER | PK, FK → tasks(id) ON DELETE CASCADE | |
-| tag_id | INTEGER | PK, FK → tags(id) ON DELETE CASCADE | |
-
-Clave primaria compuesta `(task_id, tag_id)`.
-
-### 3.5 `pomodoro_sessions`
+### 3.3 `task_tags` (Relación Tareas-Etiquetas)
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| id | INTEGER | PK, AUTOINCREMENT | |
-| period_type | TEXT | NOT NULL | `focus` \| `short_break` \| `long_break` |
-| started_at | TEXT | NOT NULL | Inicio |
-| ended_at | TEXT | NULL | Fin (NULL si se cancela a mitad; en MVP las canceladas pueden no insertarse) |
-| duration_ms | INTEGER | NOT NULL | Duración efectiva del periodo planificado o completado |
-| completed | INTEGER | NOT NULL DEFAULT 0 | 0/1 |
-| task_id | INTEGER | NULL, FK → tasks(id) ON DELETE SET NULL | Solo relevante en `focus` |
+| `task_id` | INTEGER | PK, FK → `tasks(id)` ON DELETE CASCADE | ID de la tarea. |
+| `tag_id` | INTEGER | PK, FK → `tags(id)` ON DELETE CASCADE | ID de la etiqueta. |
 
-**Regla de escritura (MVP):** insertar fila solo cuando `completed = 1` (periodo llegado a 00:00). Así se simplifica historial y estadísticas.
-
-### 3.6 `playlists`
+### 3.4 `sessions` (Historial de Enfoque con Cronómetro)
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| id | INTEGER | PK, AUTOINCREMENT | |
-| service | TEXT | NOT NULL | `spotify` (MVP); futuro `youtube_music` |
-| name | TEXT | NOT NULL | Nombre visible |
-| external_url | TEXT | NOT NULL | URL o URI |
-| external_id | TEXT | NULL | ID parseado si aplica |
-| created_at | TEXT | NOT NULL | |
+| `id` | INTEGER | PK, AUTOINCREMENT | Identificador de la sesión. |
+| `period_type` | TEXT | NOT NULL DEFAULT `'focus'` | Tipo de sesión de concentración. |
+| `started_at` | TEXT | NOT NULL | Inicio de la sesión (ISO-8601). |
+| `ended_at` | TEXT | NULL | Fin de la sesión (ISO-8601). |
+| `duration_ms` | INTEGER | NOT NULL | Duración total cronometrada en milisegundos. |
+| `completed` | INTEGER | NOT NULL DEFAULT 1 | Indicador de finalización (1 = registrada). |
+| `task_id` | INTEGER | NULL, FK → `tasks(id)` ON DELETE SET NULL | Tarea a la que se acreditó la sesión. |
 
-La playlist activa y la “última usada” se guardan en `settings` (`active_playlist_id`, `last_playlist_id`) para no duplicar estado.
-
-### 3.7 `settings`
-
-Almacén clave/valor.
+### 3.5 `playlists` (Música y Enfoque)
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| key | TEXT | PK | Clave |
-| value | TEXT | NOT NULL | Valor serializado (string/JSON número booleano) |
+| `id` | INTEGER | PK, AUTOINCREMENT | Identificador único. |
+| `service` | TEXT | NOT NULL DEFAULT `'spotify'` | Proveedor de música. |
+| `name` | TEXT | NOT NULL | Título visible de la lista. |
+| `external_url` | TEXT | NOT NULL | Enlace de reproducción (Spotify URL/URI). |
+| `external_id` | TEXT | NULL | ID interno parseado si aplica. |
+| `created_at` | TEXT | NOT NULL | Fecha de adición. |
 
-**Claves MVP sugeridas**
+### 3.6 `settings` (Configuración de la Aplicación)
 
-| key | Ejemplo de value | Significado |
-|-----|------------------|-------------|
-| focus_minutes | `25` | Duración concentración |
-| short_break_minutes | `5` | Descanso corto |
-| long_break_minutes | `15` | Descanso largo |
-| pomodoros_until_long_break | `4` | Ciclo N |
-| sound_enabled | `true` | Sonido |
-| notifications_enabled | `true` | Notificaciones |
-| locale | `es` | Idioma |
-| mcp_enabled | `false` | Servidor / tools MCP activos |
-| active_playlist_id | `3` | Lista activa |
-| last_playlist_id | `3` | Última usada |
-| active_task_id | `12` | Tarea activa actual (opcional) |
-
-### 3.8 `activity_days`
-
-Soporte eficiente de racha diaria (HU-19). Alternativa: derivar solo desde `pomodoro_sessions`; esta tabla es un **caché/agregado** actualizado al completar un `focus`.
+Almacén clave-valor para preferencias del sistema.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---------|------|---------------|-------------|
-| day | TEXT | PK | Día local `YYYY-MM-DD` |
-| focus_sessions_count | INTEGER | NOT NULL DEFAULT 0 | Pomodoros focus completados ese día |
+| `key` | TEXT | PRIMARY KEY | Identificador de configuración. |
+| `value` | TEXT | NOT NULL | Valor serializado (JSON, booleano o string). |
 
-Si se omite la tabla, `StreakService` consulta `DATE(started_at, 'localtime')` sobre sesiones; para MVP ambas son válidas. **Decisión:** incluir `activity_days` para lecturas O(1) de racha.
+**Valores predeterminados:**
 
-## 4. Índices
+| Clave | Valor por defecto | Descripción |
+| ----- | ----------------- | ----------- |
+| `sound_enabled` | `'true'` | Emisión de avisos sonoros. |
+| `notifications_enabled` | `'true'` | Notificaciones nativas del SO. |
+| `locale` | `'es'` | Idioma de la interfaz de usuario. |
+| `mcp_enabled` | `'false'` | Servidor MCP para asistentes de IA activado. |
+| `active_playlist_id` | `null` | Lista de Spotify activa. |
+| `active_task_id` | `null` | Tarea en curso vinculada al cronómetro. |
+
+*(Nota: Se eliminaron las claves obsoletas de intervalos de descanso pomodoro `focus_minutes`, `short_break_minutes`, etc.)*
+
+### 3.7 `activity_days` (Racha de Enfoque)
+
+| Columna | Tipo | Restricciones | Descripción |
+|---------|------|---------------|-------------|
+| `day` | TEXT | PRIMARY KEY | Fecha local en formato `YYYY-MM-DD`. |
+| `focus_sessions_count` | INTEGER | NOT NULL DEFAULT 0 | Número de sesiones de cronómetro completadas en el día. |
+
+---
+
+## 4. Índices para optimización de consultas
 
 ```sql
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_tasks_priority ON tasks(priority);
-CREATE INDEX idx_tasks_due_date ON tasks(due_date);
-CREATE INDEX idx_tasks_created_at ON tasks(created_at);
-CREATE INDEX idx_sessions_started_at ON pomodoro_sessions(started_at);
-CREATE INDEX idx_sessions_task_id ON pomodoro_sessions(task_id);
-CREATE INDEX idx_sessions_type_completed ON pomodoro_sessions(period_type, completed);
-CREATE INDEX idx_task_tags_tag_id ON task_tags(tag_id);
+-- Índices para ordenación rápida por Prioridad Vectorial y filtrado
+CREATE INDEX IF NOT EXISTS idx_tasks_priority_score ON tasks(priority_score DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+
+-- Índices para relaciones e historial
+CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON task_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
 ```
 
-## 5. DDL inicial (referencia)
+---
+
+## 5. Historial de migraciones
+
+Las migraciones se ejecutan secuencialmente al arrancar el proceso principal de Electron (`electron-main/db/migrations.js`):
+
+### Migración Versión 1 (Esquema Inicial)
+- Creación de tablas base `tasks`, `tags`, `task_tags`, `sessions`, `playlists`, `settings`, `activity_days`.
+- Creación de índices iniciales.
+
+### Migración Versión 2 (Cronómetro de Enfoque y Priorización Vectorial)
+- **Modificación de tabla `tasks`:**
+  - Inclusión de columnas vectoriales: `impact`, `urgency`, `effort`, `dependencies`, `risk`.
+  - Inclusión de la columna calculada `priority_score` (REAL).
+  - Cálculo retroactivo de `priority_score` para todas las tareas existentes aplicando la fórmula:
+    $$P = \frac{(I \times U) + (D \times R)}{E}$$
+  - Creación del índice `idx_tasks_priority_score` sobre `priority_score DESC`.
+- **Limpieza de tabla `settings`:**
+  - Depuración de claves obsoletas de intervalos Pomodoro (`focus_minutes`, `short_break_minutes`, `long_break_minutes`, `pomodoros_until_long_break`).
+- **Actualización de versión:**
+  - `UPDATE schema_version SET version = 2;` y `PRAGMA user_version = 2;`.
+
+---
+
+## 6. Consultas frecuentes
+
+### 6.1 Listar tareas activas ordenadas por Prioridad Vectorial
 
 ```sql
-PRAGMA foreign_keys = ON;
-PRAGMA user_version = 1;
-
-CREATE TABLE tasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('blocked','todo','in_progress','done','cancelled')),
-  priority TEXT NOT NULL DEFAULT 'medium'
-    CHECK (priority IN ('high','medium','low')),
-  due_date TEXT,
-  estimated_pomodoros INTEGER NOT NULL DEFAULT 0,
-  completed_pomodoros INTEGER NOT NULL DEFAULT 0,
-  accumulated_ms INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE tags (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL COLLATE NOCASE UNIQUE
-);
-
-CREATE TABLE task_tags (
-  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, tag_id)
-);
-
-CREATE TABLE pomodoro_sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  period_type TEXT NOT NULL
-    CHECK (period_type IN ('focus','short_break','long_break')),
-  started_at TEXT NOT NULL,
-  ended_at TEXT,
-  duration_ms INTEGER NOT NULL,
-  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
-  task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL
-);
-
-CREATE TABLE playlists (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  service TEXT NOT NULL,
-  name TEXT NOT NULL,
-  external_url TEXT NOT NULL,
-  external_id TEXT,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-
-CREATE TABLE activity_days (
-  day TEXT PRIMARY KEY,
-  focus_sessions_count INTEGER NOT NULL DEFAULT 0
-);
-```
-
-(Más los `CREATE INDEX` de la sección 4.)
-
-## 6. Consultas típicas
-
-**Tareas vencidas (hoy local `YYYY-MM-DD` = `:today`):**
-
-```sql
-SELECT * FROM tasks
-WHERE due_date IS NOT NULL
-  AND due_date < :today
-  AND status NOT IN ('done', 'cancelled');
-```
-
-**Pomodoros focus en un rango:**
-
-```sql
-SELECT COUNT(*), COALESCE(SUM(duration_ms), 0)
-FROM pomodoro_sessions
-WHERE period_type = 'focus'
-  AND completed = 1
-  AND started_at >= :from_iso
-  AND started_at < :to_iso;
-```
-
-**Exportación con filtro de estado:**
-
-```sql
-SELECT t.*, GROUP_CONCAT(g.name, ',') AS tags
+SELECT 
+  t.*,
+  GROUP_CONCAT(g.name, ',') AS tags
 FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags g ON g.id = tt.tag_id
-WHERE (:status IS NULL OR t.status = :status)
-GROUP BY t.id;
+WHERE t.status IN ('in_progress', 'todo', 'blocked')
+GROUP BY t.id
+ORDER BY 
+  CASE t.status 
+    WHEN 'in_progress' THEN 0 
+    WHEN 'todo' THEN 1 
+    WHEN 'blocked' THEN 2 
+    ELSE 3 
+  END ASC,
+  t.priority_score DESC,
+  t.created_at DESC;
 ```
 
-**Racha:** leer días en `activity_days` ordenados desc desde hoy/ayer y contar consecutivos (lógica en `StreakService`).
+### 6.2 Acreditar tiempo continuo de cronómetro a una tarea
 
-## 7. Integridad y transacciones
-
-Al completar un pomodoro `focus` con tarea:
-
-1. `BEGIN`
-2. `INSERT` en `pomodoro_sessions`
-3. `UPDATE tasks SET completed_pomodoros = completed_pomodoros + 1, accumulated_ms = accumulated_ms + :ms, updated_at = :now`
-4. Upsert `activity_days` (+1)
-5. `COMMIT`
-
-Si falla cualquier paso → `ROLLBACK`.
-
-## 8. Migraciones
-
-| Versión | Cambio |
-|---------|--------|
-| 1 | Esquema MVP de este documento |
-
-Procedimiento: al arrancar Main, leer `PRAGMA user_version`; aplicar scripts incrementales en orden; actualizar `user_version`.
-
-## 9. Volumetría estimada (MVP)
-
-| Entidad | Orden de magnitud |
-|---------|-------------------|
-| tasks | cientos–miles |
-| sessions | miles–decenas de miles / año |
-| tags | decenas |
-| playlists | decenas |
-
-SQLite es adecuado sin partición.
-
-## 10. Privacidad
-
-Todos los datos permanecen en el dispositivo del usuario. No hay telemetría de BD en el diseño MVP. El usuario es responsable de los archivos que exporte (CSV/JSON).
-
-El acceso MCP opera sobre la misma base local: solo debe habilitarse conscientemente (`mcp_enabled`). El transporte MVP es stdio (proceso local); no se exponen datos a Internet por el diseño del servidor MCP.
+```sql
+UPDATE tasks
+SET 
+  accumulated_ms = accumulated_ms + :delta_ms,
+  updated_at = :now_iso
+WHERE id = :task_id;
+```
