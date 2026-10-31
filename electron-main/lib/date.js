@@ -34,9 +34,70 @@ function calculateUrgencyFromDueDate(dueDateStr, todayStr = localDay()) {
   return 1 // Más de 7 días / plazo holgado
 }
 
+const SPANISH_DAYS = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado'
+]
+
+const SPANISH_MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre'
+]
+
+/**
+ * Retorna el día de la semana como número del 1 al 7 (1 = Lunes, 7 = Domingo).
+ */
+function getDayOfWeek(dateOrIso = new Date()) {
+  let dt
+  if (typeof dateOrIso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrIso.trim())) {
+    const [y, m, d] = dateOrIso.trim().split('-').map(Number)
+    dt = new Date(y, m - 1, d)
+  } else {
+    dt = new Date(dateOrIso)
+  }
+  const day = dt.getDay()
+  return day === 0 ? 7 : day
+}
+
+/**
+ * Formatea una fecha como: "Sábado, 31 de octubre de 2026"
+ */
+function formatDateLongSpanish(dateOrIso = new Date()) {
+  let y, m, d, dt
+  if (typeof dateOrIso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrIso.trim())) {
+    ;[y, m, d] = dateOrIso.trim().split('-').map(Number)
+    dt = new Date(y, m - 1, d)
+  } else {
+    dt = new Date(dateOrIso)
+    y = dt.getFullYear()
+    m = dt.getMonth() + 1
+    d = dt.getDate()
+  }
+  const dayName = SPANISH_DAYS[dt.getDay()]
+  const monthName = SPANISH_MONTHS[m - 1]
+  return `${dayName}, ${d} de ${monthName} de ${y}`
+}
+
 module.exports = {
   localDay,
   addDaysLocal,
   daysDiffFromToday,
-  calculateUrgencyFromDueDate
+  calculateUrgencyFromDueDate,
+  getDayOfWeek,
+  formatDateLongSpanish
 }

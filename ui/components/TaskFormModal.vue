@@ -199,6 +199,71 @@
             </div>
           </label>
 
+          <!-- Tarea rutinaria (Repetitiva) -->
+          <div class="p-3.5 rounded-xl bg-[#242426] border border-white/10 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[18px]">cached</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-white text-[13px] font-medium leading-tight">Tarea rutinaria</span>
+                  <span class="text-on-surface-variant text-[11px] leading-tight">Repetir según días de la semana</span>
+                </div>
+              </div>
+              <ToggleSwitch v-model="form.is_routine" />
+            </div>
+
+            <div v-if="form.is_routine" class="flex flex-col gap-2.5 pt-2.5 border-t border-white/5">
+              <div class="flex items-center justify-between">
+                <span class="font-label-mono-sm text-on-surface-variant text-[11px] uppercase tracking-wider">
+                  Días activos
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded-md text-[10px] font-label-mono-sm transition-colors border border-white/10 hover:border-white/20 cursor-pointer"
+                    :class="isWeekdaysSelected ? 'bg-primary/20 text-primary border-primary/40 font-medium' : 'text-on-surface-variant hover:text-white'"
+                    @click="selectWeekdays"
+                  >
+                    Lun a Vie
+                  </button>
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded-md text-[10px] font-label-mono-sm transition-colors border border-white/10 hover:border-white/20 cursor-pointer"
+                    :class="isAllDaysSelected ? 'bg-primary/20 text-primary border-primary/40 font-medium' : 'text-on-surface-variant hover:text-white'"
+                    @click="selectAllDays"
+                  >
+                    Todos
+                  </button>
+                </div>
+              </div>
+
+              <!-- Selector de días L, M, X, J, V, S, D -->
+              <div class="grid grid-cols-7 gap-1.5">
+                <button
+                  v-for="d in WEEK_DAYS"
+                  :key="d.id"
+                  type="button"
+                  class="h-8 rounded-lg font-label-mono text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
+                  :class="
+                    form.days_of_week.includes(d.id)
+                      ? 'bg-primary text-on-primary shadow-sm ring-1 ring-white/20 font-bold'
+                      : 'bg-[#1a1a1c] text-on-surface-variant hover:text-white hover:bg-white/10 border border-white/10'
+                  "
+                  :title="d.name"
+                  @click="toggleDay(d.id)"
+                >
+                  {{ d.label }}
+                </button>
+              </div>
+
+              <span class="text-[11px] text-outline font-body-sm">
+                {{ routineDaysSummary }}
+              </span>
+            </div>
+          </div>
+
           <!-- Etiquetas -->
           <div class="flex flex-col gap-1.5">
             <span
@@ -326,9 +391,20 @@ import { useTasksStore } from '@/stores/tasks.store'
 import { suggestTags } from '@/lib/levenshtein'
 import { tagDotColor } from '@/lib/tag-color'
 import { calculateUrgencyFromDueDate, getUrgencyHint } from '@/lib/urgency'
+import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['created'])
+
+const WEEK_DAYS = [
+  { id: 1, label: 'L', name: 'Lunes' },
+  { id: 2, label: 'M', name: 'Martes' },
+  { id: 3, label: 'X', name: 'Miércoles' },
+  { id: 4, label: 'J', name: 'Jueves' },
+  { id: 5, label: 'V', name: 'Viernes' },
+  { id: 6, label: 'S', name: 'Sábado' },
+  { id: 7, label: 'D', name: 'Domingo' }
+]
 
 const tasks = useTasksStore()
 const titleInput = ref(null)
@@ -343,11 +419,48 @@ const activeSuggestion = ref(-1)
 const form = reactive({
   title: '',
   due_date: '',
+  is_routine: false,
+  days_of_week: [1, 2, 3, 4, 5],
   impact: 3,
   urgency: 1,
   effort: 3,
   dependencies: 1,
   risk: 1
+})
+
+function toggleDay(id) {
+  const idx = form.days_of_week.indexOf(id)
+  if (idx >= 0) {
+    form.days_of_week.splice(idx, 1)
+  } else {
+    form.days_of_week.push(id)
+    form.days_of_week.sort((a, b) => a - b)
+  }
+}
+
+function selectWeekdays() {
+  form.days_of_week = [1, 2, 3, 4, 5]
+}
+
+function selectAllDays() {
+  form.days_of_week = [1, 2, 3, 4, 5, 6, 7]
+}
+
+const isWeekdaysSelected = computed(() => {
+  const d = form.days_of_week
+  return d.length === 5 && [1, 2, 3, 4, 5].every((val) => d.includes(val))
+})
+
+const isAllDaysSelected = computed(() => form.days_of_week.length === 7)
+
+const routineDaysSummary = computed(() => {
+  if (!form.days_of_week.length) return 'Selecciona al menos un día'
+  if (isAllDaysSelected.value) return 'Todos los días de la semana'
+  if (isWeekdaysSelected.value) return 'Lunes a Viernes (días laborables)'
+  const names = form.days_of_week
+    .map((id) => WEEK_DAYS.find((w) => w.id === id)?.name)
+    .filter(Boolean)
+  return names.join(', ')
 })
 
 const urgencyHint = computed(() => getUrgencyHint(form.due_date))
@@ -399,6 +512,8 @@ async function loadKnownTags() {
 function resetForm() {
   form.title = ''
   form.due_date = ''
+  form.is_routine = false
+  form.days_of_week = [1, 2, 3, 4, 5]
   form.impact = 3
   form.urgency = 1
   form.effort = 3
@@ -504,7 +619,7 @@ async function submit() {
   try {
     if (tagQuery.value.trim()) commitTag(tagQuery.value)
     const tags = [...selectedTags.value]
-    const res = await tasks.create({
+    const payload = {
       title,
       due_date: form.due_date || null,
       impact: form.impact,
@@ -514,7 +629,12 @@ async function submit() {
       risk: form.risk,
       tags,
       status: 'todo'
-    })
+    }
+    if (form.is_routine && form.days_of_week.length > 0) {
+      payload.is_routine = true
+      payload.days_of_week = [...form.days_of_week].sort((a, b) => a - b)
+    }
+    const res = await tasks.create(payload)
     if (res?.ok) {
       emit('created', res.data)
       close()

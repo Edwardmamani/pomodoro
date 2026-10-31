@@ -170,6 +170,15 @@
             <span class="material-symbols-outlined text-[13px]">timer</span>
             <span>{{ formatAccumulated(liveAccumulated) }}</span>
           </span>
+
+          <span
+            v-if="task.routine_id"
+            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-semibold"
+            title="Tarea rutinaria (repetitiva)"
+          >
+            <span class="material-symbols-outlined text-[12px]">cached</span>
+            <span>Rutina</span>
+          </span>
         </div>
       </div>
     </div>
@@ -182,7 +191,7 @@
         title="Eliminar tarea"
         :aria-label="`Eliminar ${task.title}`"
         :disabled="removing"
-        @click="confirmDelete = true"
+        @click="handleDeleteClick"
       >
         <span class="material-symbols-outlined text-[16px]">delete</span>
       </button>
@@ -196,6 +205,14 @@
     confirm-label="Eliminar"
     @confirm="onDelete"
   />
+
+  <RoutineScopeModal
+    v-model:open="showScopeModal"
+    :action="scopeAction"
+    :task-title="task.title"
+    @select="onRoutineScopeSelect"
+    @cancel="onRoutineScopeCancel"
+  />
 </template>
 
 <script setup>
@@ -208,6 +225,7 @@ import { tagDotColor } from '@/lib/tag-color'
 import TaskStatusMenu from '@/components/TaskStatusMenu.vue'
 import TaskPriorityMenu from '@/components/TaskPriorityMenu.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import RoutineScopeModal from '@/components/RoutineScopeModal.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },
@@ -225,6 +243,9 @@ const tasks = useTasksStore()
 const timer = useTimerStore()
 const confirmDelete = ref(false)
 const removing = ref(false)
+const showScopeModal = ref(false)
+const scopeAction = ref('edit')
+const pendingTitleEdit = ref('')
 const titleDraft = ref(props.task.title || '')
 const titleFocused = ref(false)
 const tagQuery = ref('')
@@ -286,7 +307,52 @@ async function saveTitle() {
     return
   }
   if (title === props.task.title) return
+
+  if (props.task.routine_id) {
+    pendingTitleEdit.value = title
+    scopeAction.value = 'edit'
+    showScopeModal.value = true
+    return
+  }
+
   await tasks.update(props.task.id, { title })
+}
+
+function handleDeleteClick() {
+  if (props.task.routine_id) {
+    scopeAction.value = 'delete'
+    showScopeModal.value = true
+  } else {
+    confirmDelete.value = true
+  }
+}
+
+async function onRoutineScopeSelect(scope) {
+  if (scopeAction.value === 'delete') {
+    if (removing.value) return
+    removing.value = true
+    try {
+      await tasks.remove(props.task.id, { scope })
+    } finally {
+      removing.value = false
+    }
+  } else if (scopeAction.value === 'edit') {
+    if (pendingTitleEdit.value) {
+      await tasks.update(
+        props.task.id,
+        { title: pendingTitleEdit.value },
+        { scope }
+      )
+      pendingTitleEdit.value = ''
+    }
+  }
+}
+
+function onRoutineScopeCancel() {
+  if (scopeAction.value === 'edit') {
+    titleDraft.value = props.task.title || ''
+    pendingTitleEdit.value = ''
+  }
 }
 
 async function openDatePicker() {

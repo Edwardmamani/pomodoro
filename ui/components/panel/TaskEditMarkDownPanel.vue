@@ -12,11 +12,21 @@
         <span class="material-symbols-outlined text-[18px]">arrow_back</span>
       </button>
       <div class="flex-1 min-w-0 flex items-center justify-between gap-2">
-        <h3
-          class="font-headline-md text-[17px] text-on-surface tracking-tight truncate"
-        >
-          Notas
-        </h3>
+        <div class="flex items-center gap-2 min-w-0">
+          <h3
+            class="font-headline-md text-[17px] text-on-surface tracking-tight truncate"
+          >
+            Notas
+          </h3>
+          <span
+            v-if="task?.routine_id"
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold tracking-wide shrink-0"
+            title="Archivo de notas compartido para todas las instancias de esta rutina"
+          >
+            <span class="material-symbols-outlined text-[13px]">cached</span>
+            <span>Nota compartida de rutina</span>
+          </span>
+        </div>
         <span
           v-if="noteStatus"
           class="font-label-mono-sm text-outline/80 shrink-0"

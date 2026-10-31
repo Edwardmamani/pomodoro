@@ -91,16 +91,20 @@ export const useTasksStore = defineStore('tasks', () => {
     return update(id, { status })
   }
 
-  async function update(id, input) {
-    const res = await window.pomodoroAPI.tasks.update(id, input)
+  async function update(id, input, options = {}) {
+    const res = await window.pomodoroAPI.tasks.update(id, input, options)
     if (res.ok) await refresh()
     return res
   }
 
-  async function remove(id) {
-    const res = await window.pomodoroAPI.tasks.remove(id)
+  async function remove(id, options = {}) {
+    const res = await window.pomodoroAPI.tasks.remove(id, options)
     if (res.ok) await refresh()
     return res
+  }
+
+  async function getRoutine(routineId) {
+    return window.pomodoroAPI.tasks.getRoutine(routineId)
   }
 
   async function exportTasks(format = 'json') {
@@ -148,6 +152,7 @@ export const useTasksStore = defineStore('tasks', () => {
     updateStatus,
     update,
     remove,
+    getRoutine,
     exportTasks,
     subscribe
   }

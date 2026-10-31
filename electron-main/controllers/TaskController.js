@@ -4,6 +4,8 @@ const fs = require('fs')
 const TaskModel = require('../models/TaskModel')
 const SettingsModel = require('../models/SettingsModel')
 const NoteModel = require('../models/NoteModel')
+const RoutineModel = require('../models/RoutineModel')
+const { localDay, getDayOfWeek } = require('../lib/date')
 
 const CSV_HEADER =
   'id,title,status,priority,priority_score,impact,urgency,effort,dependencies,risk,due_date,accumulated_ms,tags'
@@ -19,14 +21,15 @@ function csvEscape(value) {
 class TaskController {
   constructor() {
     this.tasks = new TaskModel()
+    this.routines = new RoutineModel()
     this.settings = new SettingsModel()
     this.notes = new NoteModel()
     this.bus = new EventEmitter()
 
-    // Sincronización de urgencias dinámicas al iniciar
+    // Sincronización de urgencias dinámicas y rutinas al iniciar
     this.tasks.syncDailyUrgencies()
 
-    // Verificación periódica para recalcular urgencias al cambiar de día
+    // Verificación periódica para recalcular urgencias y generar tareas rutinarias al cambiar de día
     this.dailySyncTimer = setInterval(() => {
       if (this.tasks.needsDailySync()) {
         this.tasks.syncDailyUrgencies()
@@ -51,6 +54,54 @@ class TaskController {
     const title = String(input.title || '').trim()
     if (!title) return { ok: false, error: 'TITLE_REQUIRED' }
 
+    const isRoutine = Boolean(
+      input.is_routine || (Array.isArray(input.days_of_week) && input.days_of_week.length > 0)
+    )
+
+    if (isRoutine) {
+      const routineId = this.routines.create({
+        title,
+        priority: input.priority,
+        estimated: Number(input.estimated_pomodoros) || 0,
+        impact: input.impact,
+        urgency: input.urgency,
+        effort: input.effort,
+        dependencies: input.dependencies,
+        risk: input.risk,
+        daysOfWeek: input.days_of_week || [],
+        tags: Array.isArray(input.tags) ? input.tags : []
+      })
+
+      const today = localDay()
+      const currentDayOfWeek = getDayOfWeek(today)
+      const matchesToday = RoutineModel.matchesDay(
+        input.days_of_week || [],
+        currentDayOfWeek
+      )
+
+      let createdTask = null
+      if (matchesToday) {
+        const taskId = this.tasks.create({
+          title,
+          status: input.status || 'todo',
+          priority: input.priority,
+          dueDate: today,
+          estimated: Number(input.estimated_pomodoros) || 0,
+          tags: Array.isArray(input.tags) ? input.tags : [],
+          impact: input.impact,
+          urgency: input.urgency,
+          effort: input.effort,
+          dependencies: input.dependencies,
+          risk: input.risk,
+          routineId
+        })
+        createdTask = this.tasks.getById(taskId)
+      }
+
+      this.emitChanged()
+      return { ok: true, data: createdTask, routineId }
+    }
+
     const id = this.tasks.create({
       title,
       status: input.status || 'todo',
@@ -68,8 +119,9 @@ class TaskController {
     return { ok: true, data: this.tasks.getById(id) }
   }
 
-  update(_event, id, input) {
+  update(_event, id, input, options = {}) {
     input = input || {}
+    options = options || {}
     const existing = this.tasks.getById(id)
     if (!existing) return { ok: false, error: 'NOT_FOUND' }
 
@@ -78,6 +130,22 @@ class TaskController {
     if (!title) return { ok: false, error: 'TITLE_REQUIRED' }
 
     const status = input.status ?? existing.status
+
+    if (existing.routine_id && options.scope === 'all') {
+      this.routines.update(existing.routine_id, {
+        title,
+        priority: input.priority,
+        estimated: input.estimated_pomodoros,
+        impact: input.impact,
+        urgency: input.urgency,
+        effort: input.effort,
+        dependencies: input.dependencies,
+        risk: input.risk,
+        daysOfWeek: input.days_of_week,
+        tags: input.tags
+      })
+    }
+
     this.tasks.update(id, {
       title,
       status,
@@ -92,7 +160,8 @@ class TaskController {
       urgency: input.urgency,
       effort: input.effort,
       dependencies: input.dependencies,
-      risk: input.risk
+      risk: input.risk,
+      routineId: existing.routine_id
     })
 
     if (status === 'in_progress') {
@@ -127,20 +196,41 @@ class TaskController {
     return { ok: true, data: this.tasks.getById(id) }
   }
 
-  remove(_event, id) {
-    if (this.tasks.remove(id) === 0) return { ok: false, error: 'NOT_FOUND' }
+  remove(_event, id, options = {}) {
+    options = options || {}
+    const existing = this.tasks.getById(id)
+    if (!existing) return { ok: false, error: 'NOT_FOUND' }
+
+    if (existing.routine_id && options.scope === 'all') {
+      const routineId = existing.routine_id
+      this.routines.delete(routineId)
+      try {
+        this.notes.removeForRoutine(routineId)
+      } catch {
+        /* la nota es auxiliar */
+      }
+    } else {
+      if (this.tasks.remove(id) === 0) return { ok: false, error: 'NOT_FOUND' }
+      try {
+        if (!existing.routine_id) {
+          this.notes.removeForTask(id)
+        }
+      } catch {
+        /* la nota es auxiliar */
+      }
+    }
 
     if (this.settings.getAll().active_task_id === id) {
       this.settings.setMany({ active_task_id: '' })
       this.notifyTimerActiveChanged(null)
     }
-    try {
-      this.notes.removeForTask(id)
-    } catch {
-      /* la nota es auxiliar; no bloquear el borrado de la tarea */
-    }
     this.emitChanged()
     return { ok: true }
+  }
+
+  getRoutine(_event, routineId) {
+    if (!routineId) return { ok: false, error: 'INVALID_ID' }
+    return { ok: true, data: this.routines.getById(routineId) }
   }
 
   async export(_event, format, filters) {

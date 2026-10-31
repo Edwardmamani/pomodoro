@@ -246,11 +246,119 @@ async function testNotes() {
   }
 }
 
+// 8. Test de Tareas Rutinarias (Issue #2)
+async function testRoutineTasks() {
+  const { getDayOfWeek, formatDateLongSpanish } = require('../electron-main/lib/date')
+  const RoutineModel = require('../electron-main/models/RoutineModel')
+  const routineModel = new RoutineModel()
+
+  const currentDayOfWeek = getDayOfWeek(today)
+
+  // 8.1 Crear rutina activa que incluye hoy
+  const routineRes = taskController.create(null, {
+    title: 'Repaso Anki Diario',
+    is_routine: true,
+    days_of_week: [1, 2, 3, 4, 5, 6, 7],
+    impact: 4,
+    effort: 2,
+    tags: ['Estudio', 'Rutina']
+  })
+
+  if (!routineRes.ok || !routineRes.routineId || !routineRes.data) {
+    throw new Error('Creación de tarea rutinaria para hoy falló')
+  }
+
+  const routineTaskToday = routineRes.data
+  if (routineTaskToday.routine_id !== routineRes.routineId) {
+    throw new Error(`routine_id en tarea creada incorrecto: ${routineTaskToday.routine_id}`)
+  }
+  if (routineTaskToday.due_date !== today) {
+    throw new Error(`due_date esperado ${today}, obtenido ${routineTaskToday.due_date}`)
+  }
+
+  // 8.2 Crear rutina para días que NO incluyen hoy -> no debe crearse tarea hoy
+  const otherDay = (currentDayOfWeek % 7) + 1
+  const futureRoutineRes = taskController.create(null, {
+    title: 'Rutina día alterno',
+    is_routine: true,
+    days_of_week: [otherDay],
+    impact: 3
+  })
+
+  if (!futureRoutineRes.ok || !futureRoutineRes.routineId) {
+    throw new Error('Creación de plantilla de rutina futura falló')
+  }
+  if (futureRoutineRes.data !== null) {
+    throw new Error('No debe crearse tarea para hoy si hoy no es uno de los días configurados')
+  }
+
+  // 8.3 Comprobar sincronización diaria (sin duplicar si ya existe)
+  const countBeforeSync = taskModel.list({ routine_id: routineRes.routineId }).length
+  taskModel.syncDailyRoutines(today)
+  const countAfterSync = taskModel.list({ routine_id: routineRes.routineId }).length
+  if (countBeforeSync !== countAfterSync || countAfterSync !== 1) {
+    throw new Error(`syncDailyRoutines duplicó la tarea de hoy: esperado 1, obtenido ${countAfterSync}`)
+  }
+
+  // 8.4 Comprobar archivo .md compartido con encabezado automático
+  const noteLoad = await notesController.load(null, routineTaskToday.id)
+  if (!noteLoad.ok || !noteLoad.data.isRoutine) {
+    throw new Error('notesController.load no reconoció tarea rutinaria')
+  }
+
+  const expectedHeader = `### ${formatDateLongSpanish(today)}`
+  if (!noteLoad.data.content.includes(expectedHeader)) {
+    throw new Error(`Contenido de nota no incluye encabezado esperado: "${expectedHeader}"`)
+  }
+
+  // Guardar notas para hoy
+  const updatedNoteContent = noteLoad.data.content + '\n- Vocabulario repaso 20 palabras completado.'
+  const noteSave = await notesController.save(null, routineTaskToday.id, updatedNoteContent)
+  if (!noteSave.ok) throw new Error('Guardado de nota rutinaria falló')
+
+  // Simular otra instancia de la misma rutina (ej. otro día) para verificar que comparten el mismo archivo
+  const fakeAnotherDayTaskId = taskModel.create({
+    title: 'Repaso Anki Diario',
+    due_date: '2026-11-01',
+    routineId: routineRes.routineId
+  })
+  const noteLoadAnotherDay = await notesController.load(null, fakeAnotherDayTaskId)
+  if (!noteLoadAnotherDay.data.content.includes('Vocabulario repaso 20 palabras completado')) {
+    throw new Error('Las instancias de la rutina no están compartiendo el mismo archivo note.md')
+  }
+
+  // 8.5 Actualización con scope: 'all'
+  const updateAllRes = taskController.update(
+    null,
+    routineTaskToday.id,
+    { title: 'Repaso Anki Pro' },
+    { scope: 'all' }
+  )
+  if (!updateAllRes.ok) throw new Error('update con scope all falló')
+  const routineInDb = routineModel.getById(routineRes.routineId)
+  if (!routineInDb || routineInDb.title !== 'Repaso Anki Pro') {
+    throw new Error('update con scope all no actualizó la plantilla en routines')
+  }
+
+  // 8.6 Eliminación con scope: 'all'
+  const removeRes = taskController.remove(null, routineTaskToday.id, { scope: 'all' })
+  if (!removeRes.ok) throw new Error('remove con scope all falló')
+  const routineAfterDelete = routineModel.getById(routineRes.routineId)
+  if (routineAfterDelete !== null) {
+    throw new Error('remove con scope all no eliminó la rutina de la tabla routines')
+  }
+  const remainingTasks = taskModel.list({ routine_id: routineRes.routineId })
+  if (remainingTasks.length !== 0) {
+    throw new Error('remove con scope all no eliminó en cascada las tareas de la rutina')
+  }
+}
+
 async function main() {
   await testStopwatch()
   await testNotes()
+  await testRoutineTasks()
   closeConnection()
-  console.log('✅ Smoke tests pasaron exitosamente (Cronómetro + Priorización Vectorial + DB)')
+  console.log('✅ Smoke tests pasaron exitosamente (Cronómetro + Priorización Vectorial + Rutinas + DB)')
 }
 
 main().catch((err) => {

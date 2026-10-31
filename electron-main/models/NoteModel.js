@@ -13,6 +13,8 @@ const IMAGE_EXT = new Set([
   '.bmp'
 ])
 
+const { formatDateLongSpanish } = require('../lib/date')
+
 class NoteModel {
   static IMAGE_EXTENSIONS = [...IMAGE_EXT].map((ext) => ext.slice(1))
 
@@ -20,23 +22,45 @@ class NoteModel {
     return path.join(app.getPath('userData'), 'tasks')
   }
 
-  dirFor(taskId) {
+  dirFor(taskId, routineId = null) {
+    if (routineId != null && routineId !== '') {
+      return path.join(this.root(), `routine_${routineId}`)
+    }
     return path.join(this.root(), String(taskId))
   }
 
-  pathFor(taskId) {
-    return path.join(this.dirFor(taskId), 'note.md')
+  pathFor(taskId, routineId = null) {
+    return path.join(this.dirFor(taskId, routineId), 'note.md')
   }
 
-  ensureDir(taskId) {
-    const dir = this.dirFor(taskId)
+  ensureDir(taskId, routineId = null) {
+    const dir = this.dirFor(taskId, routineId)
     fs.mkdirSync(path.join(dir, 'assets'), { recursive: true })
     return dir
   }
 
-  async read(taskId) {
-    this.ensureDir(taskId)
-    const filePath = this.pathFor(taskId)
+  ensureDailyHeader(content, dateOrIso = new Date()) {
+    const header = `### ${formatDateLongSpanish(dateOrIso)}`
+    const text = content ?? ''
+    const trimmed = text.trim()
+
+    if (!trimmed) {
+      return `${header}\n\n`
+    }
+
+    if (
+      trimmed.includes(header) ||
+      (typeof dateOrIso === 'string' && trimmed.includes(`### ${dateOrIso}`))
+    ) {
+      return text
+    }
+
+    return `${header}\n\n${text}`
+  }
+
+  async read(taskId, routineId = null) {
+    this.ensureDir(taskId, routineId)
+    const filePath = this.pathFor(taskId, routineId)
     let content = ''
     try {
       content = await fsp.readFile(filePath, 'utf8')
@@ -46,17 +70,17 @@ class NoteModel {
     return { content, filePath }
   }
 
-  async write(taskId, content) {
-    this.ensureDir(taskId)
-    const filePath = this.pathFor(taskId)
+  async write(taskId, content, routineId = null) {
+    this.ensureDir(taskId, routineId)
+    const filePath = this.pathFor(taskId, routineId)
     await fsp.writeFile(filePath, content ?? '', 'utf8')
     return filePath
   }
 
   /** Copia la imagen a assets/ sin pisar archivos existentes. */
-  async importAsset(taskId, sourcePath) {
-    this.ensureDir(taskId)
-    const assetsDir = path.join(this.dirFor(taskId), 'assets')
+  async importAsset(taskId, sourcePath, routineId = null) {
+    this.ensureDir(taskId, routineId)
+    const assetsDir = path.join(this.dirFor(taskId, routineId), 'assets')
     await fsp.mkdir(assetsDir, { recursive: true })
 
     const baseName = path.basename(sourcePath)
@@ -83,6 +107,14 @@ class NoteModel {
   removeForTask(taskId) {
     if (taskId == null || taskId === '') return
     fs.rmSync(this.dirFor(taskId), { recursive: true, force: true })
+  }
+
+  removeForRoutine(routineId) {
+    if (routineId == null || routineId === '') return
+    fs.rmSync(path.join(this.root(), `routine_${routineId}`), {
+      recursive: true,
+      force: true
+    })
   }
 
   static isImage(filePath) {

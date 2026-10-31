@@ -2,8 +2,10 @@ const { getConnection } = require('../db/connection')
 const {
   localDay,
   addDaysLocal,
-  calculateUrgencyFromDueDate
+  calculateUrgencyFromDueDate,
+  getDayOfWeek
 } = require('../lib/date')
+const RoutineModel = require('./RoutineModel')
 
 const SELECT_WITH_TAGS = `
   SELECT t.*, GROUP_CONCAT(g.name, ',') AS tags
@@ -63,6 +65,8 @@ class TaskModel {
 
     this.lastSyncDay = today
 
+    this.syncDailyRoutines(today)
+
     const openTasks = db
       .prepare(
         `SELECT id, due_date, impact, urgency, effort, dependencies, risk, priority_score
@@ -98,6 +102,81 @@ class TaskModel {
     tx()
   }
 
+  syncDailyRoutines(today = localDay()) {
+    const db = this.db
+    const tableExists = db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'routines'"
+      )
+      .get()
+    if (!tableExists) return
+
+    const activeRoutines = db
+      .prepare('SELECT * FROM routines WHERE is_active = 1')
+      .all()
+    if (!activeRoutines.length) return
+
+    const currentDayOfWeek = getDayOfWeek(today)
+    const checkTaskStmt = db.prepare(
+      'SELECT id FROM tasks WHERE routine_id = ? AND due_date = ? LIMIT 1'
+    )
+    const getTagsStmt = db.prepare(`
+      SELECT g.name FROM tags g
+      JOIN routine_tags rt ON rt.tag_id = g.id
+      WHERE rt.routine_id = ?
+    `)
+
+    const now = new Date().toISOString()
+    const tx = db.transaction(() => {
+      for (const r of activeRoutines) {
+        if (!RoutineModel.matchesDay(r.days_of_week, currentDayOfWeek)) {
+          continue
+        }
+        const existing = checkTaskStmt.get(r.id, today)
+        if (existing) continue
+
+        const tags = getTagsStmt.all(r.id).map((row) => row.name)
+        const urg = calculateUrgencyFromDueDate(today, today)
+        const score = calculatePriorityScore(
+          r.impact,
+          urg,
+          r.effort,
+          r.dependencies,
+          r.risk
+        )
+
+        const taskId = db
+          .prepare(
+            `
+          INSERT INTO tasks (
+            title, status, priority, due_date, estimated_pomodoros,
+            completed_pomodoros, accumulated_ms, impact, urgency, effort,
+            dependencies, risk, priority_score, routine_id, created_at, updated_at
+          ) VALUES (?, 'todo', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+          )
+          .run(
+            r.title,
+            r.priority,
+            today,
+            r.estimated_pomodoros,
+            r.impact,
+            urg,
+            r.effort,
+            r.dependencies,
+            r.risk,
+            score,
+            r.id,
+            now,
+            now
+          ).lastInsertRowid
+
+        this.linkTags(taskId, tags)
+      }
+    })
+    tx()
+  }
+
   static map(row) {
     if (!row) return null
     const impact = row.impact != null ? Number(row.impact) : 3
@@ -125,6 +204,7 @@ class TaskModel {
       dependencies,
       risk,
       priority_score: priorityScore,
+      routine_id: row.routine_id != null ? Number(row.routine_id) : null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       tags: row.tags
@@ -159,6 +239,14 @@ class TaskModel {
         WHERE tt2.task_id = t.id AND g2.name = @tag COLLATE NOCASE
       )`)
       params.tag = String(filters.tag).trim()
+    }
+    if (filters.routine_id !== undefined) {
+      if (filters.routine_id === null) {
+        clauses.push('t.routine_id IS NULL')
+      } else {
+        clauses.push('t.routine_id = @routine_id')
+        params.routine_id = filters.routine_id
+      }
     }
 
     const today = localDay()
@@ -231,7 +319,8 @@ class TaskModel {
     urgency,
     effort = 3,
     dependencies = 1,
-    risk = 1
+    risk = 1,
+    routineId = null
   }) {
     const db = this.db
     const now = new Date().toISOString()
@@ -254,8 +343,8 @@ class TaskModel {
         INSERT INTO tasks (
           title, status, priority, due_date, estimated_pomodoros,
           completed_pomodoros, accumulated_ms, impact, urgency, effort,
-          dependencies, risk, priority_score, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+          dependencies, risk, priority_score, routine_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
@@ -270,6 +359,7 @@ class TaskModel {
           dep,
           rsk,
           score,
+          routineId || null,
           now,
           now
         ).lastInsertRowid
@@ -292,7 +382,8 @@ class TaskModel {
       urgency,
       effort,
       dependencies,
-      risk
+      risk,
+      routineId
     }
   ) {
     const db = this.db
@@ -330,6 +421,9 @@ class TaskModel {
         ? Math.max(1, Math.min(5, Number(risk) || 1))
         : existing.risk
 
+    const targetRoutineId =
+      routineId !== undefined ? (routineId || null) : existing.routine_id
+
     const score = calculatePriorityScore(imp, urg, eff, dep, rsk)
     const prio = priority !== undefined ? priority : derivePriorityLabel(score)
 
@@ -342,7 +436,7 @@ class TaskModel {
         UPDATE tasks SET
           title = ?, status = ?, priority = ?, due_date = ?,
           estimated_pomodoros = ?, impact = ?, urgency = ?, effort = ?,
-          dependencies = ?, risk = ?, priority_score = ?, updated_at = ?
+          dependencies = ?, risk = ?, priority_score = ?, routine_id = ?, updated_at = ?
         WHERE id = ?
       `
       ).run(
@@ -357,6 +451,7 @@ class TaskModel {
         dep,
         rsk,
         score,
+        targetRoutineId,
         now,
         id
       )
