@@ -16,6 +16,9 @@ router.handle('pomodoro:tasks:delete', (e, id, options) =>
 router.handle('pomodoro:tasks:getRoutine', (e, routineId) =>
   tasks.getRoutine(e, routineId)
 )
+router.handle('pomodoro:tasks:updateRoutine', (e, routineId, input) =>
+  tasks.updateRoutine(e, routineId, input)
+)
 router.handle('pomodoro:tasks:export', (e, format, filters) =>
   tasks.export(e, format, filters)
 )

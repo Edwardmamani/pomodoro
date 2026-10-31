@@ -21,13 +21,13 @@
             <div
               class="w-7 h-7 rounded-lg bg-primary/20 text-primary flex items-center justify-center font-medium"
             >
-              <span class="material-symbols-outlined text-[18px]">add_task</span>
+              <span class="material-symbols-outlined text-[18px]">{{ isEditing ? (isRoutineTask ? 'cached' : 'edit') : 'add_task' }}</span>
             </div>
             <h2
               id="task-form-title"
               class="font-headline-md text-[18px] text-white tracking-tight"
             >
-              Nueva tarea
+              {{ modalTitle }}
             </h2>
           </div>
           <button
@@ -375,8 +375,8 @@
               class="h-9 px-5 rounded-xl bg-primary hover:bg-primary-fixed-dim text-white font-label-md flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
               :disabled="submitting || !form.title.trim()"
             >
-              <span class="material-symbols-outlined text-[18px]">check</span>
-              Crear tarea
+              <span class="material-symbols-outlined text-[18px]">{{ isEditing ? 'save' : 'check' }}</span>
+              {{ submitLabel }}
             </button>
           </div>
         </form>
@@ -393,8 +393,33 @@ import { tagDotColor } from '@/lib/tag-color'
 import { calculateUrgencyFromDueDate, getUrgencyHint } from '@/lib/urgency'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
+const props = defineProps({
+  editTask: {
+    type: Object,
+    default: null
+  }
+})
+
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['created'])
+const emit = defineEmits(['created', 'updated'])
+
+const isEditing = computed(() => Boolean(props.editTask))
+
+const isRoutineTask = computed(() => {
+  if (!props.editTask) return false
+  return Boolean(
+    props.editTask.routine_id ||
+    props.editTask.is_routine ||
+    String(props.editTask.id).startsWith('routine_')
+  )
+})
+
+const modalTitle = computed(() => {
+  if (!isEditing.value) return 'Nueva tarea'
+  return isRoutineTask.value ? 'Editar tarea rutinaria' : 'Editar tarea'
+})
+
+const submitLabel = computed(() => (isEditing.value ? 'Guardar cambios' : 'Crear tarea'))
 
 const WEEK_DAYS = [
   { id: 1, label: 'L', name: 'Lunes' },
@@ -628,16 +653,34 @@ async function submit() {
       dependencies: form.dependencies,
       risk: form.risk,
       tags,
-      status: 'todo'
+      status: props.editTask ? props.editTask.status : 'todo'
     }
     if (form.is_routine && form.days_of_week.length > 0) {
       payload.is_routine = true
       payload.days_of_week = [...form.days_of_week].sort((a, b) => a - b)
     }
-    const res = await tasks.create(payload)
-    if (res?.ok) {
-      emit('created', res.data)
-      close()
+
+    if (isEditing.value) {
+      let res
+      const rawId = props.editTask.id
+      if (typeof rawId === 'string' && rawId.startsWith('routine_')) {
+        const routineId = Number(rawId.replace('routine_', ''))
+        res = await tasks.updateRoutine(routineId, payload)
+      } else if (props.editTask.routine_id) {
+        res = await tasks.updateRoutine(props.editTask.routine_id, payload)
+      } else {
+        res = await tasks.update(rawId, payload)
+      }
+      if (res?.ok) {
+        emit('updated', res.data)
+        close()
+      }
+    } else {
+      const res = await tasks.create(payload)
+      if (res?.ok) {
+        emit('created', res.data)
+        close()
+      }
     }
   } finally {
     submitting.value = false
@@ -646,7 +689,45 @@ async function submit() {
 
 watch(open, async (v) => {
   if (v) {
-    resetForm()
+    if (props.editTask) {
+      form.title = props.editTask.title || ''
+      form.due_date = props.editTask.due_date || ''
+      form.impact = props.editTask.impact ?? 3
+      form.urgency = props.editTask.urgency ?? 1
+      form.effort = props.editTask.effort ?? 3
+      form.dependencies = props.editTask.dependencies ?? 1
+      form.risk = props.editTask.risk ?? 1
+      selectedTags.value = Array.isArray(props.editTask.tags) ? [...props.editTask.tags] : []
+      tagQuery.value = ''
+      tagFocused.value = false
+      activeSuggestion.value = -1
+
+      const isRoutine = isRoutineTask.value
+      form.is_routine = isRoutine
+      if (Array.isArray(props.editTask.days_of_week) && props.editTask.days_of_week.length > 0) {
+        form.days_of_week = [...props.editTask.days_of_week]
+      } else if (isRoutine) {
+        const routineId =
+          props.editTask.routine_id ||
+          (String(props.editTask.id).startsWith('routine_')
+            ? Number(String(props.editTask.id).replace('routine_', ''))
+            : null)
+        if (routineId) {
+          const rRes = await tasks.getRoutine(routineId)
+          if (rRes?.ok && rRes.data?.days_of_week) {
+            form.days_of_week = [...rRes.data.days_of_week]
+          } else {
+            form.days_of_week = [1, 2, 3, 4, 5]
+          }
+        } else {
+          form.days_of_week = [1, 2, 3, 4, 5]
+        }
+      } else {
+        form.days_of_week = [1, 2, 3, 4, 5]
+      }
+    } else {
+      resetForm()
+    }
     await loadKnownTags()
     await nextTick()
     titleInput.value?.focus()

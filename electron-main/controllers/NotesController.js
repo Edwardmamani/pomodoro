@@ -13,6 +13,10 @@ class NotesController {
   }
 
   getRoutineId(taskId) {
+    if (typeof taskId === 'string' && taskId.startsWith('routine_')) {
+      const parsed = Number(taskId.replace('routine_', ''))
+      return Number.isFinite(parsed) ? parsed : null
+    }
     try {
       const task = this.taskModel.getById(taskId)
       return task?.routine_id || null

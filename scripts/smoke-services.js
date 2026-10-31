@@ -351,6 +351,45 @@ async function testRoutineTasks() {
   if (remainingTasks.length !== 0) {
     throw new Error('remove con scope all no eliminó en cascada las tareas de la rutina')
   }
+
+  // 8.7 Filtro de rutinas y actualización de días para rutinas no programadas hoy
+  const anotherDay = currentDayOfWeek === 7 ? 1 : currentDayOfWeek + 1
+  const notTodayRoutineRes = taskController.create(null, {
+    title: 'Rutina en otro día',
+    days_of_week: [anotherDay],
+    is_routine: true
+  })
+  if (!notTodayRoutineRes.ok) throw new Error('Falló creación de rutina no programada hoy')
+
+  // Listar con filtro { routine: true }
+  const routineListRes = taskController.list(null, { routine: true })
+  if (!routineListRes.ok) throw new Error('taskController.list con { routine: true } falló')
+  const foundTemplate = routineListRes.data.find((r) => r.routine_id === notTodayRoutineRes.routineId)
+  if (!foundTemplate) throw new Error('No se encontró la rutina plantilla en el filtro routine')
+  if (!foundTemplate.is_routine_template || foundTemplate.is_active_today) {
+    throw new Error('La rutina no programada para hoy debe tener is_routine_template=true y is_active_today=false')
+  }
+
+  // Actualizar días para incluir el día de hoy
+  const updateRoutineDaysRes = taskController.updateRoutine(null, notTodayRoutineRes.routineId, {
+    title: 'Rutina en otro día (ahora hoy)',
+    days_of_week: [anotherDay, currentDayOfWeek]
+  })
+  if (!updateRoutineDaysRes.ok) throw new Error('updateRoutine falló')
+
+  // Verificar que syncDailyRoutines instanció la tarea para hoy
+  const routineListAfterRes = taskController.list(null, { routine: true })
+  const updatedItem = routineListAfterRes.data.find((r) => r.routine_id === notTodayRoutineRes.routineId)
+  if (!updatedItem || !updatedItem.is_active_today) {
+    throw new Error('Tras agregar el día de hoy a la rutina, debe ser is_active_today=true')
+  }
+
+  // Eliminar la plantilla usando id virtual routine_<id>
+  const removeTemplateRes = taskController.remove(null, `routine_${notTodayRoutineRes.routineId}`)
+  if (!removeTemplateRes.ok) throw new Error('remove con id virtual routine_<id> falló')
+  if (routineModel.getById(notTodayRoutineRes.routineId) !== null) {
+    throw new Error('remove con id virtual routine_<id> no eliminó la rutina')
+  }
 }
 
 async function main() {

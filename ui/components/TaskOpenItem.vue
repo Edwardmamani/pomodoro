@@ -171,13 +171,26 @@
             <span>{{ formatAccumulated(liveAccumulated) }}</span>
           </span>
 
-          <span
-            v-if="task.routine_id"
-            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-semibold"
-            title="Tarea rutinaria (repetitiva)"
+          <button
+            v-if="task.routine_id || task.is_routine"
+            type="button"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 hover:bg-primary/25 text-primary text-[10px] font-semibold transition-colors cursor-pointer group/routine"
+            :title="`Configurar rutina: ${daysSummaryLabel}. Haz clic para editar días u opciones.`"
+            @click.stop="emit('edit-routine', task)"
           >
             <span class="material-symbols-outlined text-[12px]">cached</span>
             <span>Rutina</span>
+            <span v-if="daysAbbrev" class="font-normal opacity-85">({{ daysAbbrev }})</span>
+            <span class="material-symbols-outlined text-[10px] opacity-60 group-hover/routine:opacity-100 transition-opacity">edit</span>
+          </button>
+
+          <span
+            v-if="task.is_routine_template && !task.is_active_today"
+            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant/80 text-[10px] font-medium"
+            title="Esta rutina no está programada para hoy"
+          >
+            <span class="material-symbols-outlined text-[11px]">event_busy</span>
+            <span>No programada hoy</span>
           </span>
         </div>
       </div>
@@ -232,7 +245,45 @@ const props = defineProps({
   navigateOnSelect: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'edit-routine'])
+
+const WEEKDAY_ABBREVS = {
+  1: 'L',
+  2: 'M',
+  3: 'X',
+  4: 'J',
+  5: 'V',
+  6: 'S',
+  7: 'D'
+}
+
+const WEEKDAY_NAMES = {
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado',
+  7: 'Domingo'
+}
+
+const daysAbbrev = computed(() => {
+  const d = props.task.days_of_week
+  if (!d || !d.length) return ''
+  if (d.length === 7) return 'Todos los días'
+  if (d.length === 5 && [1, 2, 3, 4, 5].every((v) => d.includes(v))) return 'L-V'
+  if (d.length === 6 && [1, 2, 3, 4, 5, 6].every((v) => d.includes(v))) return 'L-S'
+  return d.map((id) => WEEKDAY_ABBREVS[id] || id).join(',')
+})
+
+const daysSummaryLabel = computed(() => {
+  const d = props.task.days_of_week
+  if (!d || !d.length) return 'Sin días configurados'
+  if (d.length === 7) return 'Todos los días'
+  if (d.length === 5 && [1, 2, 3, 4, 5].every((v) => d.includes(v))) return 'Lunes a Viernes'
+  if (d.length === 6 && [1, 2, 3, 4, 5, 6].every((v) => d.includes(v))) return 'Lunes a Sábado'
+  return d.map((id) => WEEKDAY_NAMES[id] || id).join(', ')
+})
 
 function onCardClick() {
   if (!props.navigateOnSelect) return
@@ -319,7 +370,9 @@ async function saveTitle() {
 }
 
 function handleDeleteClick() {
-  if (props.task.routine_id) {
+  if (props.task.is_routine_template) {
+    confirmDelete.value = true
+  } else if (props.task.routine_id) {
     scopeAction.value = 'delete'
     showScopeModal.value = true
   } else {

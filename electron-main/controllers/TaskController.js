@@ -42,7 +42,86 @@ class TaskController {
   }
 
   list(_event, filters) {
-    return { ok: true, data: this.tasks.list(filters || {}) }
+    filters = filters || {}
+    if (filters.routine) {
+      const routines = this.routines.listActive()
+      const today = localDay()
+      const todayTasks = this.tasks.list({ due: 'today' })
+      const todayTasksByRoutine = new Map()
+      for (const t of todayTasks) {
+        if (t.routine_id) {
+          todayTasksByRoutine.set(t.routine_id, t)
+        }
+      }
+
+      let result = routines.map((r) => {
+        const existingToday = todayTasksByRoutine.get(r.id)
+        if (existingToday) {
+          return {
+            ...existingToday,
+            days_of_week: r.days_of_week,
+            is_routine: true,
+            is_active_today: true
+          }
+        }
+        return {
+          id: `routine_${r.id}`,
+          routine_id: r.id,
+          title: r.title,
+          status: 'todo',
+          priority: r.priority,
+          due_date: null,
+          estimated_pomodoros: r.estimated_pomodoros,
+          completed_pomodoros: 0,
+          accumulated_ms: 0,
+          impact: r.impact,
+          urgency: r.urgency,
+          effort: r.effort,
+          dependencies: r.dependencies,
+          risk: r.risk,
+          priority_score: r.priority_score,
+          days_of_week: r.days_of_week,
+          is_routine: true,
+          is_routine_template: true,
+          is_active_today: false,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          tags: r.tags || []
+        }
+      })
+
+      if (filters.q) {
+        const q = String(filters.q).toLowerCase().trim()
+        result = result.filter((item) => item.title.toLowerCase().includes(q))
+      }
+      if (filters.tag) {
+        const tag = String(filters.tag).toLowerCase().trim()
+        result = result.filter((item) =>
+          (item.tags || []).some((t) => t.toLowerCase() === tag)
+        )
+      }
+      return { ok: true, data: result }
+    }
+
+    const tasksList = this.tasks.list(filters)
+    const routinesMap = new Map()
+    for (const r of this.routines.listActive()) {
+      routinesMap.set(r.id, r)
+    }
+    const enriched = tasksList.map((t) => {
+      if (t.routine_id && routinesMap.has(t.routine_id)) {
+        const r = routinesMap.get(t.routine_id)
+        return {
+          ...t,
+          days_of_week: r.days_of_week,
+          is_routine: true,
+          is_active_today: true
+        }
+      }
+      return t
+    })
+
+    return { ok: true, data: enriched }
   }
 
   listTags() {
@@ -122,6 +201,12 @@ class TaskController {
   update(_event, id, input, options = {}) {
     input = input || {}
     options = options || {}
+
+    if (typeof id === 'string' && id.startsWith('routine_')) {
+      const routineId = Number(id.replace('routine_', ''))
+      return this.updateRoutine(_event, routineId, input)
+    }
+
     const existing = this.tasks.getById(id)
     if (!existing) return { ok: false, error: 'NOT_FOUND' }
 
@@ -144,6 +229,7 @@ class TaskController {
         daysOfWeek: input.days_of_week,
         tags: input.tags
       })
+      this.tasks.syncDailyRoutines()
     }
 
     this.tasks.update(id, {
@@ -198,6 +284,19 @@ class TaskController {
 
   remove(_event, id, options = {}) {
     options = options || {}
+
+    if (typeof id === 'string' && id.startsWith('routine_')) {
+      const routineId = Number(id.replace('routine_', ''))
+      this.routines.delete(routineId)
+      try {
+        this.notes.removeForRoutine(routineId)
+      } catch {
+        /* ignore */
+      }
+      this.emitChanged()
+      return { ok: true }
+    }
+
     const existing = this.tasks.getById(id)
     if (!existing) return { ok: false, error: 'NOT_FOUND' }
 
@@ -226,6 +325,46 @@ class TaskController {
     }
     this.emitChanged()
     return { ok: true }
+  }
+
+  updateRoutine(_event, routineId, input) {
+    if (!routineId) return { ok: false, error: 'INVALID_ID' }
+    input = input || {}
+    const updated = this.routines.update(routineId, {
+      title: input.title,
+      priority: input.priority,
+      estimated: input.estimated_pomodoros,
+      impact: input.impact,
+      urgency: input.urgency,
+      effort: input.effort,
+      dependencies: input.dependencies,
+      risk: input.risk,
+      daysOfWeek: input.days_of_week,
+      tags: input.tags
+    })
+
+    this.tasks.syncDailyRoutines()
+
+    const today = localDay()
+    const taskToday = this.tasks.db
+      .prepare('SELECT id FROM tasks WHERE routine_id = ? AND due_date = ?')
+      .get(routineId, today)
+    if (taskToday) {
+      this.tasks.update(taskToday.id, {
+        title: input.title,
+        priority: input.priority,
+        estimated: input.estimated_pomodoros,
+        impact: input.impact,
+        urgency: input.urgency,
+        effort: input.effort,
+        dependencies: input.dependencies,
+        risk: input.risk,
+        tags: input.tags
+      })
+    }
+
+    this.emitChanged()
+    return { ok: true, data: updated }
   }
 
   getRoutine(_event, routineId) {

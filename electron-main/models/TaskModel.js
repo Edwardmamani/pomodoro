@@ -427,8 +427,13 @@ class TaskModel {
     const score = calculatePriorityScore(imp, urg, eff, dep, rsk)
     const prio = priority !== undefined ? priority : derivePriorityLabel(score)
 
+    const targetTitle = title !== undefined ? String(title).trim() : existing.title
+    const targetStatus = status !== undefined ? status : existing.status
+    const targetEstimated =
+      estimated !== undefined ? Number(estimated) || 0 : existing.estimated_pomodoros
+
     const tx = db.transaction(() => {
-      if (status === 'in_progress') {
+      if (targetStatus === 'in_progress') {
         this.demoteInProgress(id, now)
       }
       db.prepare(
@@ -440,11 +445,11 @@ class TaskModel {
         WHERE id = ?
       `
       ).run(
-        title,
-        status,
+        targetTitle,
+        targetStatus,
         prio,
         targetDueDate,
-        estimated,
+        targetEstimated,
         imp,
         urg,
         eff,

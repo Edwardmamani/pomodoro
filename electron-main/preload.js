@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     remove: (id, options) => invoke('pomodoro:tasks:delete', id, options),
     getRoutine: (routineId) =>
       invoke('pomodoro:tasks:getRoutine', routineId),
+    updateRoutine: (routineId, input) =>
+      invoke('pomodoro:tasks:updateRoutine', routineId, input),
     export: (format, filters) =>
       invoke('pomodoro:tasks:export', format, filters),
     onChanged: (cb) => {
