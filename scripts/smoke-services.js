@@ -471,6 +471,36 @@ async function testMusic() {
     throw new Error('parseMediaUrl falló con enlace corto de YouTube')
   }
 
+  // 9.7 Verificar soporte específico de YouTube Music (playlist y enlace canónico)
+  const ytmParsed = parseMediaUrl('https://music.youtube.com/playlist?list=PLRrXghsZBv6c')
+  if (
+    !ytmParsed ||
+    ytmParsed.service !== 'youtube' ||
+    ytmParsed.type !== 'playlist' ||
+    ytmParsed.playlistId !== 'PLRrXghsZBv6c' ||
+    !ytmParsed.isMusicDomain ||
+    ytmParsed.canonicalUrl !== 'https://music.youtube.com/playlist?list=PLRrXghsZBv6c'
+  ) {
+    throw new Error('parseMediaUrl falló con enlace de YouTube Music playlist')
+  }
+
+  const ytmWatchParsed = parseMediaUrl('https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=PLRrXghsZBv6c')
+  if (
+    !ytmWatchParsed ||
+    ytmWatchParsed.service !== 'youtube' ||
+    ytmWatchParsed.videoId !== 'dQw4w9WgXcQ' ||
+    ytmWatchParsed.playlistId !== 'PLRrXghsZBv6c' ||
+    !ytmWatchParsed.isMusicDomain
+  ) {
+    throw new Error('parseMediaUrl falló con video dentro de playlist en YouTube Music')
+  }
+
+  // 9.8 Verificar resolución de títulos de pistas en MusicController
+  const trackTitlesRes = await musicController.fetchTrackTitles(null, ['dQw4w9WgXcQ'])
+  if (!trackTitlesRes.ok || typeof trackTitlesRes.data !== 'object' || !trackTitlesRes.data.dQw4w9WgXcQ) {
+    throw new Error('musicController.fetchTrackTitles falló')
+  }
+
   const spParsed = parseMediaUrl('https://open.spotify.com/playlist/37i9dQZF1DX3Ogo9pFvBkY')
   if (!spParsed || spParsed.service !== 'spotify' || spParsed.type !== 'playlist') {
     throw new Error('parseMediaUrl falló con playlist de Spotify')

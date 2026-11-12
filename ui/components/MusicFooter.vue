@@ -76,31 +76,27 @@
           <button
             type="button"
             class="font-label-md text-on-surface truncate hover:text-primary cursor-pointer transition-colors text-left"
-            :title="music.active?.name || 'Seleccionar playlist'"
-            @click="isModalOpen = true"
+            :title="music.currentTrackTitle"
+            @click="music.openQueueModal()"
           >
-            {{ music.active?.name || 'Sin playlist seleccionada' }}
+            {{ music.currentTrackTitle }}
           </button>
         </div>
 
         <div class="flex items-center gap-1.5 font-label-mono-sm text-on-surface-variant truncate text-[10px]">
           <span
-            class="px-1.5 py-0.2 rounded font-medium"
+            class="px-1.5 py-0.2 rounded font-medium flex-shrink-0"
             :class="
               music.currentService === 'youtube'
                 ? 'bg-red-500/20 text-red-400'
                 : 'bg-emerald-500/20 text-emerald-400'
             "
           >
-            {{ music.currentService === 'youtube' ? 'YouTube' : 'Spotify' }}
+            {{ music.parsedMedia?.isMusicDomain ? 'YouTube Music' : (music.currentService === 'youtube' ? 'YouTube' : 'Spotify') }}
           </span>
           <span>·</span>
           <span class="truncate">
-            {{
-              music.currentService === 'youtube'
-                ? (music.isPlaying ? 'Reproduciendo en segundo plano' : 'Pausado')
-                : 'Spotify · Abrir en cliente o mini-player'
-            }}
+            {{ music.currentTrackSubtitle }}
           </span>
         </div>
       </div>
@@ -236,25 +232,25 @@
       <button
         type="button"
         class="text-outline hover:text-on-surface transition-colors p-1.5 rounded-lg hover:bg-surface-container cursor-pointer"
-        title="Abrir en YouTube / Spotify externamente"
+        title="Abrir playlist en YouTube / navegador"
         @click="music.open"
       >
         <span class="material-symbols-outlined text-[18px]">open_in_new</span>
       </button>
 
-      <!-- Selector de listas -->
+      <!-- Selector de listas y cola de reproducción -->
       <button
         type="button"
         class="text-outline hover:text-on-surface transition-colors p-1.5 rounded-lg hover:bg-surface-container cursor-pointer"
-        title="Lista de reproducción"
-        @click="isModalOpen = true"
+        title="Ver canciones de la lista y otras playlists"
+        @click="music.openQueueModal()"
       >
         <span class="material-symbols-outlined text-[19px]">queue_music</span>
       </button>
     </div>
 
     <!-- Modal de Gestión de Playlists -->
-    <MusicPlaylistModal v-model="isModalOpen" />
+    <MusicPlaylistModal v-model="music.showPlaylistModal" />
   </footer>
 </template>
 
@@ -265,7 +261,6 @@ import { formatTime } from '@/lib/music-parser'
 import MusicPlaylistModal from '@/components/MusicPlaylistModal.vue'
 
 const music = useMusicStore()
-const isModalOpen = ref(false)
 
 const progressBar = ref(null)
 const volumeBar = ref(null)

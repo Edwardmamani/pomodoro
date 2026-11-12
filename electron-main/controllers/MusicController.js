@@ -1,6 +1,9 @@
 const { shell } = require('electron')
+const https = require('https')
 const PlaylistModel = require('../models/PlaylistModel')
 const SettingsModel = require('../models/SettingsModel')
+
+const titleCache = new Map()
 
 class MusicController {
   constructor() {
@@ -63,6 +66,54 @@ class MusicController {
     }
 
     return { ok: true, data: this.activePlaylist() }
+  }
+
+  async fetchTrackTitles(_event, ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return { ok: true, data: {} }
+    const results = {}
+    const toFetch = ids.slice(0, 60)
+    await Promise.all(
+      toFetch.map((id) =>
+        new Promise((resolve) => {
+          if (titleCache.has(id)) {
+            results[id] = titleCache.get(id)
+            resolve()
+            return
+          }
+          const req = https.get(
+            `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
+            (res) => {
+              let body = ''
+              res.on('data', (c) => (body += c))
+              res.on('end', () => {
+                try {
+                  const json = JSON.parse(body)
+                  const info = {
+                    title: json.title || `Pista ${id}`,
+                    author: json.author_name || ''
+                  }
+                  titleCache.set(id, info)
+                  results[id] = info
+                } catch {
+                  results[id] = { title: `Pista ${id}`, author: '' }
+                }
+                resolve()
+              })
+            }
+          )
+          req.on('error', () => {
+            results[id] = { title: `Pista ${id}`, author: '' }
+            resolve()
+          })
+          req.setTimeout(3500, () => {
+            req.destroy()
+            results[id] = { title: `Pista ${id}`, author: '' }
+            resolve()
+          })
+        })
+      )
+    )
+    return { ok: true, data: results }
   }
 
   activePlaylist() {

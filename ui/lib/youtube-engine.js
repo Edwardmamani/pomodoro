@@ -90,27 +90,33 @@ export class YouTubeEngine {
     try {
       if (parsed.playlistId) {
         if (autoplay) {
-          this.player.loadPlaylist({
-            list: parsed.playlistId,
-            listType: 'playlist',
-            index: 0
-          })
+          if (typeof this.player.loadPlaylist === 'function') {
+            this.player.loadPlaylist(parsed.playlistId, 0, 0)
+          }
         } else {
-          this.player.cuePlaylist({
-            list: parsed.playlistId,
-            listType: 'playlist',
-            index: 0
-          })
+          if (typeof this.player.cuePlaylist === 'function') {
+            this.player.cuePlaylist(parsed.playlistId, 0, 0)
+          }
         }
       } else if (parsed.videoId) {
         if (autoplay) {
-          this.player.loadVideoById(parsed.videoId)
+          this.player.loadVideoById(parsed.videoId, 0)
         } else {
-          this.player.cueVideoById(parsed.videoId)
+          this.player.cueVideoById(parsed.videoId, 0)
         }
       }
     } catch (err) {
       console.warn('[YouTubeEngine] Error al cargar pista:', err)
+    }
+  }
+
+  playVideoAt(index) {
+    if (this.isReady && this.player && typeof this.player.playVideoAt === 'function') {
+      try {
+        this.player.playVideoAt(index)
+      } catch (err) {
+        console.warn('[YouTubeEngine] Error en playVideoAt:', err)
+      }
     }
   }
 
@@ -175,13 +181,18 @@ export class YouTubeEngine {
   }
 
   next() {
-    if (this.isReady && this.player && typeof this.player.nextVideo === 'function') {
+    if (this.isReady && this.player) {
       try {
-        this.player.nextVideo()
+        const list = this.getPlaylist()
+        if (list.length > 0 && typeof this.player.nextVideo === 'function') {
+          this.player.nextVideo()
+          return true
+        }
       } catch (err) {
         console.warn('[YouTubeEngine] Error en nextVideo:', err)
       }
     }
+    return false
   }
 
   prev() {
@@ -190,13 +201,51 @@ export class YouTubeEngine {
         const time = this.getCurrentTime()
         if (time > 3 && typeof this.player.seekTo === 'function') {
           this.player.seekTo(0, true)
-        } else if (typeof this.player.previousVideo === 'function') {
+          return true
+        }
+        const list = this.getPlaylist()
+        if (list.length > 0 && typeof this.player.previousVideo === 'function') {
           this.player.previousVideo()
+          return true
         }
       } catch (err) {
         console.warn('[YouTubeEngine] Error en prevVideo:', err)
       }
     }
+    return false
+  }
+
+  getPlaylist() {
+    if (this.isReady && this.player && typeof this.player.getPlaylist === 'function') {
+      try {
+        return this.player.getPlaylist() || []
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+
+  getPlaylistIndex() {
+    if (this.isReady && this.player && typeof this.player.getPlaylistIndex === 'function') {
+      try {
+        return this.player.getPlaylistIndex() || 0
+      } catch {
+        return 0
+      }
+    }
+    return 0
+  }
+
+  getVideoData() {
+    if (this.isReady && this.player && typeof this.player.getVideoData === 'function') {
+      try {
+        return this.player.getVideoData() || {}
+      } catch {
+        return {}
+      }
+    }
+    return {}
   }
 
   setShuffle(shuffle) {

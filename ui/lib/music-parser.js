@@ -72,15 +72,29 @@ export function parseYouTubeUrl(url = '') {
   }
 
   const isPlaylistOnly = !videoId && !!playlistId
+  const isMusicDomain = clean.includes('music.youtube.com')
+
+  let canonicalUrl = clean
+  if (playlistId) {
+    canonicalUrl = isMusicDomain
+      ? `https://music.youtube.com/playlist?list=${playlistId}`
+      : `https://www.youtube.com/playlist?list=${playlistId}`
+  } else if (videoId) {
+    canonicalUrl = isMusicDomain
+      ? `https://music.youtube.com/watch?v=${videoId}`
+      : `https://www.youtube.com/watch?v=${videoId}`
+  }
 
   return {
     service: 'youtube',
-    type: isPlaylistOnly ? 'playlist' : 'video',
-    id: videoId || playlistId,
+    type: playlistId ? 'playlist' : 'video',
+    id: playlistId || videoId,
     videoId,
     playlistId,
+    isMusicDomain,
+    canonicalUrl,
     thumbnailUrl: videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null,
-    embedUrl: isPlaylistOnly
+    embedUrl: playlistId
       ? `https://www.youtube-nocookie.com/embed/videoseries?list=${playlistId}&autoplay=1&enablejsapi=1`
       : `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1`
   }

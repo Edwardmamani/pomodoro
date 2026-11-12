@@ -10,6 +10,17 @@ export const useMusicStore = defineStore('music', () => {
   const playlists = ref([])
   const active = ref(null)
 
+  // Información de la pista actual dentro de la playlist
+  const currentTrack = ref({
+    title: '',
+    author: '',
+    videoId: '',
+    index: 0
+  })
+
+  // Lista de canciones/videos que componen la playlist actual
+  const playlistTracks = ref([])
+
   const isPlaying = ref(false)
   const isBuffering = ref(false)
   const currentTime = ref(0)
@@ -21,6 +32,7 @@ export const useMusicStore = defineStore('music', () => {
 
   const showMiniPlayer = ref(false)
   const showPlaylistModal = ref(false)
+  const modalInitialTab = ref('queue') // 'queue' o 'playlists'
 
   let ytEngine = null
   let progressTimer = null
@@ -52,10 +64,96 @@ export const useMusicStore = defineStore('music', () => {
     return active.value?.service || 'youtube'
   })
 
+  const currentTrackTitle = computed(() => {
+    return currentTrack.value?.title || active.value?.name || 'Sin reproducción'
+  })
+
+  const currentTrackSubtitle = computed(() => {
+    if (currentService.value === 'spotify') {
+      return 'Spotify · Abrir en cliente o mini-player'
+    }
+    const parts = []
+    if (currentTrack.value?.author) parts.push(currentTrack.value.author)
+    if (active.value?.name) parts.push(active.value.name)
+    if (playlistTracks.value.length > 1) {
+      parts.push(`Pista ${currentTrack.value.index + 1} de ${playlistTracks.value.length}`)
+    }
+    return parts.length > 0 ? parts.join(' · ') : 'YouTube Music'
+  })
+
   const progressPercent = computed(() => {
     if (!duration.value || duration.value <= 0) return 0
     return Math.min(100, Math.max(0, (currentTime.value / duration.value) * 100))
   })
+
+  // Sincronizar información de la pista y de la lista desde el reproductor
+  function syncTrackInfo() {
+    if (!ytEngine || currentService.value !== 'youtube') return
+
+    const data = ytEngine.getVideoData() || {}
+    const ids = ytEngine.getPlaylist() || []
+    const idx = ytEngine.getPlaylistIndex() || 0
+
+    if (data.title) {
+      currentTrack.value = {
+        title: data.title,
+        author: data.author || '',
+        videoId: data.video_id || '',
+        index: idx
+      }
+    }
+
+    if (ids.length > 0) {
+      // Reconstruir lista de pistas si cambió
+      const hasChanged =
+        playlistTracks.value.length !== ids.length ||
+        (playlistTracks.value[0] && playlistTracks.value[0].videoId !== ids[0])
+
+      if (hasChanged) {
+        playlistTracks.value = ids.map((id, i) => ({
+          index: i,
+          videoId: id,
+          title: i === idx && data.title ? data.title : `Pista ${i + 1}`,
+          author: i === idx && data.author ? data.author : '',
+          thumbnailUrl: `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+        }))
+
+        // Consultar títulos en segundo plano para poblar la lista
+        fetchTitlesForIds(ids)
+      } else if (playlistTracks.value[idx]) {
+        if (data.title) playlistTracks.value[idx].title = data.title
+        if (data.author) playlistTracks.value[idx].author = data.author
+      }
+    } else if (data.title) {
+      playlistTracks.value = [
+        {
+          index: 0,
+          videoId: data.video_id || '',
+          title: data.title,
+          author: data.author || '',
+          thumbnailUrl: data.video_id ? `https://img.youtube.com/vi/${data.video_id}/mqdefault.jpg` : null
+        }
+      ]
+    }
+  }
+
+  async function fetchTitlesForIds(ids) {
+    if (!ids || ids.length === 0 || !window.pomodoroAPI?.music?.fetchTrackTitles) return
+    try {
+      const res = await window.pomodoroAPI.music.fetchTrackTitles(ids)
+      if (res.ok && res.data) {
+        playlistTracks.value.forEach((track) => {
+          const info = res.data[track.videoId]
+          if (info && info.title) {
+            track.title = info.title
+            if (info.author) track.author = info.author
+          }
+        })
+      }
+    } catch (err) {
+      console.warn('Error al obtener títulos de pistas:', err)
+    }
+  }
 
   // Iniciar el motor de YouTube en el contenedor DOM provisto
   async function initPlayer(containerId = 'yt-player-host') {
@@ -69,19 +167,24 @@ export const useMusicStore = defineStore('music', () => {
         }
       },
       onStateChange: (event) => {
-        // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (video cued)
         const state = event.data
+        syncTrackInfo()
+
         if (state === 1) {
+          // PLAYING
           isPlaying.value = true
           isBuffering.value = false
           startProgressTracking()
         } else if (state === 2) {
+          // PAUSED
           isPlaying.value = false
           isBuffering.value = false
           stopProgressTracking()
         } else if (state === 3) {
+          // BUFFERING
           isBuffering.value = true
         } else if (state === 0) {
+          // ENDED
           isPlaying.value = false
           stopProgressTracking()
           currentTime.value = 0
@@ -113,8 +216,9 @@ export const useMusicStore = defineStore('music', () => {
         const dur = ytEngine.getDuration()
         currentTime.value = cur
         if (dur > 0) duration.value = dur
+        syncTrackInfo()
       }
-    }, 300)
+    }, 400)
   }
 
   function stopProgressTracking() {
@@ -137,7 +241,6 @@ export const useMusicStore = defineStore('music', () => {
     if (activeRes.ok && activeRes.data) {
       active.value = activeRes.data
     } else if (playlists.value.length > 0) {
-      // Priorizar YouTube si no hay activa
       const defaultPl =
         playlists.value.find((p) => p.service === 'youtube') || playlists.value[0]
       await select(defaultPl.id)
@@ -151,6 +254,8 @@ export const useMusicStore = defineStore('music', () => {
     active.value = res.data
     currentTime.value = 0
     duration.value = 0
+    currentTrack.value = { title: '', author: '', videoId: '', index: 0 }
+    playlistTracks.value = []
 
     if (currentService.value === 'youtube' && parsedMedia.value) {
       if (ytEngine) {
@@ -161,10 +266,8 @@ export const useMusicStore = defineStore('music', () => {
         }
       }
     } else if (currentService.value === 'spotify') {
-      // Para Spotify, pausar YouTube
       if (ytEngine) ytEngine.pause()
       isPlaying.value = startPlaying
-      // Si el usuario quiere reproducir spotify, mostramos el mini-player para interactuar
       if (startPlaying) showMiniPlayer.value = true
     }
 
@@ -238,7 +341,26 @@ export const useMusicStore = defineStore('music', () => {
     }
   }
 
+  // Reproducir una pista específica por índice dentro de la playlist
+  function playTrackAt(index) {
+    if (ytEngine && currentService.value === 'youtube') {
+      ytEngine.playVideoAt(index)
+      currentTrack.value.index = index
+      isPlaying.value = true
+      startProgressTracking()
+    }
+  }
+
+  // Siguiente canción en la playlist actual (o siguiente playlist si es única)
   function next() {
+    if (currentService.value === 'youtube' && ytEngine) {
+      const advanced = ytEngine.next()
+      if (advanced) {
+        return
+      }
+    }
+
+    // Si no había siguiente canción en la playlist, pasar a la siguiente playlist guardada
     if (playlists.value.length === 0) return
     const idx = playlists.value.findIndex((p) => p.id === active.value?.id)
     if (idx === -1) {
@@ -258,10 +380,16 @@ export const useMusicStore = defineStore('music', () => {
     select(playlists.value[nextIdx].id, isPlaying.value)
   }
 
+  // Canción anterior en la playlist actual (o reiniciar pista / anterior playlist)
   function prev() {
     if (currentTime.value > 3) {
       seekTo(0)
       return
+    }
+
+    if (currentService.value === 'youtube' && ytEngine) {
+      const moved = ytEngine.prev()
+      if (moved) return
     }
 
     if (playlists.value.length === 0) return
@@ -287,6 +415,16 @@ export const useMusicStore = defineStore('music', () => {
 
   function toggleMiniPlayer() {
     showMiniPlayer.value = !showMiniPlayer.value
+  }
+
+  function openQueueModal() {
+    modalInitialTab.value = 'queue'
+    showPlaylistModal.value = true
+  }
+
+  function openPlaylistsModal() {
+    modalInitialTab.value = 'playlists'
+    showPlaylistModal.value = true
   }
 
   function open() {
@@ -315,6 +453,8 @@ export const useMusicStore = defineStore('music', () => {
   return {
     playlists,
     active,
+    currentTrack,
+    playlistTracks,
     isPlaying,
     isBuffering,
     currentTime,
@@ -325,8 +465,11 @@ export const useMusicStore = defineStore('music', () => {
     isRepeat,
     showMiniPlayer,
     showPlaylistModal,
+    modalInitialTab,
     parsedMedia,
     currentService,
+    currentTrackTitle,
+    currentTrackSubtitle,
     progressPercent,
     initPlayer,
     refresh,
@@ -338,11 +481,14 @@ export const useMusicStore = defineStore('music', () => {
     seekByPercent,
     setVolume,
     toggleMute,
+    playTrackAt,
     next,
     prev,
     toggleShuffle,
     toggleRepeat,
     toggleMiniPlayer,
+    openQueueModal,
+    openPlaylistsModal,
     open,
     addPlaylist,
     deletePlaylist

@@ -9,5 +9,8 @@ router.handle('pomodoro:music:select', (e, id) => music.select(e, id))
 router.handle('pomodoro:music:open', (e) => music.open(e))
 router.handle('pomodoro:music:add', (e, input) => music.add(e, input))
 router.handle('pomodoro:music:delete', (e, id) => music.delete(e, id))
+router.handle('pomodoro:music:fetchTrackTitles', (e, ids) =>
+  music.fetchTrackTitles(e, ids)
+)
 
 module.exports = router
