@@ -2,21 +2,14 @@ const { app } = require('electron')
 const fs = require('fs')
 const fsp = require('fs/promises')
 const path = require('path')
-
-const IMAGE_EXT = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-  '.svg',
-  '.bmp'
-])
-
 const { formatDateLongSpanish } = require('../lib/date')
+const NoteMediaHelper = require('../lib/NoteMediaHelper')
 
 class NoteModel {
-  static IMAGE_EXTENSIONS = [...IMAGE_EXT].map((ext) => ext.slice(1))
+  static IMAGE_EXTENSIONS = NoteMediaHelper.IMAGE_EXTENSIONS
+  static isImage = NoteMediaHelper.isImage
+  static resolveMediaUrl = NoteMediaHelper.resolveMediaUrl
+  static absolutePathFromMediaUrl = NoteMediaHelper.absolutePathFromMediaUrl
 
   root() {
     return path.join(app.getPath('userData'), 'tasks')
@@ -43,18 +36,13 @@ class NoteModel {
     const header = `### ${formatDateLongSpanish(dateOrIso)}`
     const text = content ?? ''
     const trimmed = text.trim()
-
-    if (!trimmed) {
-      return `${header}\n\n`
-    }
-
+    if (!trimmed) return `${header}\n\n`
     if (
       trimmed.includes(header) ||
       (typeof dateOrIso === 'string' && trimmed.includes(`### ${dateOrIso}`))
     ) {
       return text
     }
-
     return `${header}\n\n${text}`
   }
 
@@ -77,7 +65,6 @@ class NoteModel {
     return filePath
   }
 
-  /** Copia la imagen a assets/ sin pisar archivos existentes. */
   async importAsset(taskId, sourcePath, routineId = null) {
     this.ensureDir(taskId, routineId)
     const assetsDir = path.join(this.dirFor(taskId, routineId), 'assets')
@@ -115,49 +102,6 @@ class NoteModel {
       recursive: true,
       force: true
     })
-  }
-
-  static isImage(filePath) {
-    return IMAGE_EXT.has(path.extname(filePath).toLowerCase())
-  }
-
-  static resolveMediaUrl(documentPath, href) {
-    if (!href || typeof href !== 'string') return ''
-
-    let trimmed = href.trim().replace(/^<|>$/g, '')
-    if (/^(https?:|data:|blob:|mdmedia:)/i.test(trimmed)) {
-      return trimmed
-    }
-
-    if (/%[0-9A-Fa-f]{2}/.test(trimmed)) {
-      try {
-        trimmed = decodeURIComponent(trimmed)
-      } catch {
-        /* keep trimmed */
-      }
-    }
-
-    if (!documentPath) return ''
-
-    const docDir = path.dirname(documentPath)
-    const absolute = path.resolve(docDir, trimmed)
-    const relative = path.relative(docDir, absolute)
-
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return ''
-    }
-
-    return `mdmedia://local/${encodeURIComponent(absolute)}`
-  }
-
-  static absolutePathFromMediaUrl(requestUrl) {
-    try {
-      const u = new URL(requestUrl)
-      const encoded = u.pathname.replace(/^\//, '')
-      return decodeURIComponent(encoded)
-    } catch {
-      return null
-    }
   }
 }
 

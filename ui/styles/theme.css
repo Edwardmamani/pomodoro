@@ -1,0 +1,47 @@
+@theme {
+  --color-primary: #0A84FF;
+  --color-primary-fixed: #0A84FF;
+  --color-primary-fixed-dim: #0071E3;
+  --color-primary-container: #15325b;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #d0e2ff;
+
+  --color-secondary: #FF9F0A;
+  --color-secondary-fixed: #FF9F0A;
+  --color-secondary-fixed-dim: #E08600;
+  --color-secondary-container: #472d00;
+  --color-on-secondary: #000000;
+  --color-on-secondary-container: #ffe0b2;
+
+  --color-tertiary: #30D158;
+  --color-tertiary-fixed: #30D158;
+  --color-tertiary-fixed-dim: #248A3D;
+  --color-tertiary-container: #0b3d17;
+  --color-on-tertiary: #000000;
+
+  --color-error: #FF453A;
+  --color-error-container: #4d100d;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #ffdcd8;
+
+  --color-surface: #161618;
+  --color-surface-dim: #101012;
+  --color-surface-bright: #2c2c2e;
+  --color-surface-container-lowest: #0c0c0e;
+  --color-surface-container-low: #1c1c1e;
+  --color-surface-container: #242426;
+  --color-surface-container-high: #2c2c2e;
+  --color-surface-container-highest: #3a3a3c;
+
+  --color-on-surface: #f5f5f7;
+  --color-on-surface-variant: #98989d;
+  --color-outline: #545458;
+  --color-outline-variant: rgba(255, 255, 255, 0.12);
+
+  --font-label-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-label-mono-sm: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-display-timer: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-headline-md: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-body-md: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-label-md: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+}

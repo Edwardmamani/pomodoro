@@ -1,102 +1,8 @@
 <template>
-  <footer
-    class="relative bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-20"
-  >
-    <!-- Contenedor para compatibilidad con reproductor y Mini-player visual de YouTube Music -->
+  <footer class="relative bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-20">
     <div id="yt-player-host" class="hidden"></div>
+    <MusicMiniPlayer />
 
-    <div
-      v-if="music.showMiniPlayer && music.currentService === 'youtube'"
-      class="fixed bottom-[65px] left-6 z-40 w-[340px] h-[195px] rounded-2xl overflow-hidden shadow-2xl border border-outline-variant/30 bg-surface-container-low flex flex-col animate-fade-in"
-    >
-      <div class="relative w-full h-full flex flex-col justify-between p-4 bg-black/80 overflow-hidden">
-        <img
-          v-if="music.currentTrack?.videoId"
-          :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/hqdefault.jpg`"
-          :alt="music.currentTrackTitle"
-          class="absolute inset-0 w-full h-full object-cover opacity-40 blur-[2px] scale-105"
-        />
-        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/40"></div>
-
-        <div class="relative z-10 flex items-center justify-between">
-          <div class="flex items-center gap-1.5 font-label-mono-sm text-[11px] text-red-400">
-            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            <span>YouTube Music · Audio Directo</span>
-          </div>
-          <button
-            type="button"
-            class="w-7 h-7 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Minimizar reproductor"
-            @click="music.toggleMiniPlayer"
-          >
-            <span class="material-symbols-outlined text-[16px]">close</span>
-          </button>
-        </div>
-
-        <div class="relative z-10 flex items-center gap-3.5 my-auto">
-          <img
-            v-if="music.currentTrack?.videoId"
-            :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/mqdefault.jpg`"
-            :alt="music.currentTrackTitle"
-            class="w-16 h-16 rounded-xl object-cover shadow-lg border border-white/15 flex-shrink-0"
-          />
-          <div class="min-w-0 flex-1">
-            <p class="font-label-md text-white text-[14px] font-semibold truncate">
-              {{ music.currentTrackTitle }}
-            </p>
-            <p class="font-label-mono-sm text-white/75 text-[11px] truncate mt-0.5">
-              {{ music.currentTrack?.author || music.active?.name }}
-            </p>
-            <p
-              v-if="music.playlistTracks.length > 1"
-              class="font-label-mono-sm text-primary text-[10px] mt-1"
-            >
-              Pista {{ (music.currentTrack?.index ?? 0) + 1 }} de {{ music.playlistTracks.length }}
-            </p>
-          </div>
-        </div>
-
-        <div class="relative z-10 flex items-center justify-between text-white/80 text-[11px] font-label-mono-sm">
-          <span>{{ formattedCurrentTime }} / {{ formattedDuration }}</span>
-          <button
-            type="button"
-            class="text-primary hover:underline flex items-center gap-1 cursor-pointer"
-            @click="music.openQueueModal"
-          >
-            <span class="material-symbols-outlined text-[14px]">queue_music</span>
-            <span>Ver cola ({{ music.playlistTracks.length }})</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mini-player flotante para Spotify Embed -->
-    <div
-      v-if="music.showMiniPlayer && music.currentService === 'spotify' && music.parsedMedia?.embedUrl"
-      class="fixed bottom-[65px] left-6 z-40 w-[340px] h-[195px] rounded-2xl overflow-hidden shadow-2xl border border-outline-variant/30 bg-surface-container-low flex flex-col animate-fade-in"
-    >
-      <div class="px-3 py-1.5 bg-surface-container flex items-center justify-between border-b border-outline-variant/20">
-        <div class="flex items-center gap-1.5 font-label-mono-sm text-[11px] text-emerald-400">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span>Spotify Embed</span>
-        </div>
-        <button
-          type="button"
-          class="w-6 h-6 rounded-full hover:bg-surface-container-high text-on-surface flex items-center justify-center cursor-pointer"
-          @click="music.toggleMiniPlayer"
-        >
-          <span class="material-symbols-outlined text-[15px]">close</span>
-        </button>
-      </div>
-      <iframe
-        :src="music.parsedMedia.embedUrl"
-        class="w-full flex-1 border-0"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        loading="lazy"
-      ></iframe>
-    </div>
-
-    <!-- Izquierda: Información de pista y Servicio -->
     <div class="flex items-center gap-3.5 min-w-0 w-1/4">
       <button
         type="button"
@@ -104,270 +10,41 @@
         :title="music.showMiniPlayer ? 'Ocultar reproductor' : 'Mostrar mini-reproductor'"
         @click="music.toggleMiniPlayer"
       >
-        <img
-          v-if="music.currentTrack?.videoId"
-          :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/mqdefault.jpg`"
-          :alt="music.currentTrackTitle"
-          class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform"
-        />
+        <img v-if="music.currentTrack?.videoId" :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/mqdefault.jpg`" :alt="music.currentTrackTitle" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform" />
         <span
           class="relative z-10 material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform drop-shadow"
-          :class="
-            music.isPlaying
-              ? 'text-primary animate-pulse bg-black/50 rounded-full p-1'
-              : music.currentTrack?.videoId
-                ? 'text-white bg-black/40 rounded-full p-1'
-                : 'text-on-surface-variant'
-          "
-        >
-          {{ music.isPlaying ? 'graphic_eq' : 'music_note' }}
-        </span>
+          :class="music.isPlaying ? 'text-primary animate-pulse bg-black/50 rounded-full p-1' : music.currentTrack?.videoId ? 'text-white bg-black/40 rounded-full p-1' : 'text-on-surface-variant'"
+        >{{ music.isPlaying ? 'graphic_eq' : 'music_note' }}</span>
       </button>
 
       <div class="min-w-0 flex flex-col">
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="font-label-md text-on-surface truncate hover:text-primary cursor-pointer transition-colors text-left"
-            :title="music.currentTrackTitle"
-            @click="music.openQueueModal()"
-          >
-            {{ music.currentTrackTitle }}
-          </button>
-        </div>
-
+        <button type="button" class="font-label-md text-on-surface truncate hover:text-primary cursor-pointer transition-colors text-left" :title="music.currentTrackTitle" @click="music.openQueueModal()">
+          {{ music.currentTrackTitle }}
+        </button>
         <div class="flex items-center gap-1.5 font-label-mono-sm text-on-surface-variant truncate text-[10px]">
-          <span
-            class="px-1.5 py-0.2 rounded font-medium flex-shrink-0"
-            :class="
-              music.currentService === 'youtube'
-                ? 'bg-red-500/20 text-red-400'
-                : 'bg-emerald-500/20 text-emerald-400'
-            "
-          >
+          <span class="px-1.5 py-0.2 rounded font-medium flex-shrink-0" :class="music.currentService === 'youtube' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'">
             {{ music.parsedMedia?.isMusicDomain ? 'YouTube Music' : (music.currentService === 'youtube' ? 'YouTube' : 'Spotify') }}
           </span>
           <span>·</span>
-          <span class="truncate">
-            {{ music.currentTrackSubtitle }}
-          </span>
+          <span class="truncate">{{ music.currentTrackSubtitle }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Centro: Controles de Reproducción y Barra de Progreso -->
-    <div class="flex flex-col items-center flex-1 max-w-xl px-4">
-      <div class="flex items-center gap-4 mb-0.5">
-        <!-- Shuffle -->
-        <button
-          type="button"
-          class="p-1 rounded-lg transition-colors cursor-pointer"
-          :class="music.isShuffle ? 'text-primary' : 'text-outline hover:text-on-surface'"
-          title="Modo aleatorio"
-          @click="music.toggleShuffle"
-        >
-          <span class="material-symbols-outlined text-[18px]">shuffle</span>
-        </button>
-
-        <!-- Anterior -->
-        <button
-          type="button"
-          class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-          title="Pista anterior"
-          @click="music.prev"
-        >
-          <span class="material-symbols-outlined text-[20px]">skip_previous</span>
-        </button>
-
-        <!-- Reproducir / Pausar -->
-        <button
-          type="button"
-          class="w-9 h-9 rounded-full bg-primary hover:bg-primary-fixed-dim text-on-primary flex items-center justify-center shadow-md transition-all transform active:scale-90 cursor-pointer"
-          :title="music.isPlaying ? 'Pausar' : 'Reproducir'"
-          @click="music.togglePlay"
-        >
-          <span
-            class="material-symbols-outlined text-[20px]"
-            style="font-variation-settings: 'FILL' 1"
-          >
-            {{ music.isPlaying ? 'pause' : 'play_arrow' }}
-          </span>
-        </button>
-
-        <!-- Siguiente -->
-        <button
-          type="button"
-          class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
-          title="Siguiente pista"
-          @click="music.next"
-        >
-          <span class="material-symbols-outlined text-[20px]">skip_next</span>
-        </button>
-
-        <!-- Repetir -->
-        <button
-          type="button"
-          class="p-1 rounded-lg transition-colors cursor-pointer"
-          :class="music.isRepeat ? 'text-primary' : 'text-outline hover:text-on-surface'"
-          title="Repetir pista"
-          @click="music.toggleRepeat"
-        >
-          <span class="material-symbols-outlined text-[18px]">repeat</span>
-        </button>
-      </div>
-
-      <!-- Barra de Progreso y Tiempos -->
-      <div class="w-full flex items-center gap-3 font-label-mono-sm text-outline select-none">
-        <span class="text-on-surface-variant text-[11px] min-w-[35px] text-right">
-          {{ formattedCurrentTime }}
-        </span>
-
-        <div
-          ref="progressBar"
-          class="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden relative cursor-pointer group py-1 -my-1"
-          @click="onProgressClick"
-        >
-          <div class="h-1.5 bg-surface-container-high rounded-full overflow-hidden relative">
-            <div
-              class="h-full bg-primary rounded-full transition-all group-hover:brightness-110"
-              :style="{ width: `${music.progressPercent}%` }"
-            ></div>
-          </div>
-        </div>
-
-        <span class="text-on-surface-variant text-[11px] min-w-[35px]">
-          {{ formattedDuration }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Derecha: Volumen y Selector de Playlists -->
-    <div class="flex items-center gap-3 justify-end w-1/4">
-      <!-- Mini-player toggle icon -->
-      <button
-        type="button"
-        class="p-1.5 rounded-lg transition-colors cursor-pointer"
-        :class="music.showMiniPlayer ? 'text-primary bg-primary/10' : 'text-outline hover:text-on-surface'"
-        :title="music.showMiniPlayer ? 'Ocultar mini-reproductor' : 'Ver video/reproductor'"
-        @click="music.toggleMiniPlayer"
-      >
-        <span class="material-symbols-outlined text-[19px]">smart_display</span>
-      </button>
-
-      <!-- Control de Volumen -->
-      <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="text-outline hover:text-on-surface transition-colors cursor-pointer"
-          :title="music.isMuted ? 'Activar sonido' : 'Silenciar'"
-          @click="music.toggleMute"
-        >
-          <span class="material-symbols-outlined text-[18px]">
-            {{ volumeIcon }}
-          </span>
-        </button>
-
-        <div
-          ref="volumeBar"
-          class="w-16 md:w-20 h-1.5 bg-surface-container-high rounded-full overflow-hidden relative cursor-pointer group py-1 -my-1"
-          @click="onVolumeClick"
-        >
-          <div class="h-1.5 bg-surface-container-high rounded-full overflow-hidden relative">
-            <div
-              class="h-full bg-primary rounded-full transition-all group-hover:brightness-110"
-              :style="{ width: `${music.isMuted ? 0 : music.volume}%` }"
-            ></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Abrir externamente -->
-      <button
-        type="button"
-        class="text-outline hover:text-on-surface transition-colors p-1.5 rounded-lg hover:bg-surface-container cursor-pointer"
-        title="Abrir playlist en YouTube / navegador"
-        @click="music.open"
-      >
-        <span class="material-symbols-outlined text-[18px]">open_in_new</span>
-      </button>
-
-      <!-- Selector de listas y cola de reproducción -->
-      <button
-        type="button"
-        class="text-outline hover:text-on-surface transition-colors p-1.5 rounded-lg hover:bg-surface-container cursor-pointer"
-        title="Ver canciones de la lista y otras playlists"
-        @click="music.openQueueModal()"
-      >
-        <span class="material-symbols-outlined text-[19px]">queue_music</span>
-      </button>
-    </div>
-
-    <!-- Modal de Gestión de Playlists -->
+    <MusicPlaybackControls />
+    <MusicVolumeControls />
     <MusicPlaylistModal v-model="music.showPlaylistModal" />
   </footer>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import { useMusicStore } from '@/stores/music.store'
-import { formatTime } from '@/lib/music-parser'
+import MusicMiniPlayer from '@/components/music/MusicMiniPlayer.vue'
+import MusicPlaybackControls from '@/components/music/MusicPlaybackControls.vue'
+import MusicVolumeControls from '@/components/music/MusicVolumeControls.vue'
 import MusicPlaylistModal from '@/components/MusicPlaylistModal.vue'
 
 const music = useMusicStore()
-
-const progressBar = ref(null)
-const volumeBar = ref(null)
-
-onMounted(() => {
-  music.initPlayer('yt-player-host')
-})
-
-const formattedCurrentTime = computed(() => {
-  return formatTime(music.currentTime)
-})
-
-const formattedDuration = computed(() => {
-  if (music.duration > 0) {
-    return formatTime(music.duration)
-  }
-  return '—'
-})
-
-const volumeIcon = computed(() => {
-  if (music.isMuted || music.volume === 0) return 'volume_off'
-  if (music.volume < 40) return 'volume_down'
-  return 'volume_up'
-})
-
-function onProgressClick(e) {
-  if (!progressBar.value || music.duration <= 0) return
-  const rect = progressBar.value.getBoundingClientRect()
-  const clickX = e.clientX - rect.left
-  const pct = Math.max(0, Math.min(100, (clickX / rect.width) * 100))
-  music.seekByPercent(pct)
-}
-
-function onVolumeClick(e) {
-  if (!volumeBar.value) return
-  const rect = volumeBar.value.getBoundingClientRect()
-  const clickX = e.clientX - rect.left
-  const pct = Math.max(0, Math.min(100, (clickX / rect.width) * 100))
-  music.setVolume(pct)
-}
+onMounted(() => music.initPlayer('yt-player-host'))
 </script>
-
-<style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.animate-fade-in {
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-</style>
