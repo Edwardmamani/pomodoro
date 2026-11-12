@@ -93,6 +93,12 @@ export const useMusicStore = defineStore('music', () => {
     const data = ytEngine.getVideoData() || {}
     const ids = ytEngine.getPlaylist() || []
     const idx = ytEngine.getPlaylistIndex() || 0
+    const engineTracks = typeof ytEngine.getTracks === 'function' ? ytEngine.getTracks() : []
+    const dur = ytEngine.getDuration()
+
+    if (dur > 0) {
+      duration.value = dur
+    }
 
     if (data.title) {
       currentTrack.value = {
@@ -103,8 +109,18 @@ export const useMusicStore = defineStore('music', () => {
       }
     }
 
-    if (ids.length > 0) {
-      // Reconstruir lista de pistas si cambió
+    if (engineTracks.length > 0) {
+      playlistTracks.value = engineTracks.map((t, i) => ({
+        index: i,
+        videoId: t.videoId,
+        title: t.title || `Pista ${i + 1}`,
+        author: t.author || '',
+        duration: t.duration || 0,
+        durationText: t.durationText || '',
+        thumbnailUrl: t.thumbnailUrl || `https://img.youtube.com/vi/${t.videoId}/mqdefault.jpg`
+      }))
+    } else if (ids.length > 0) {
+      // Reconstruir lista de pistas si cambió (modo fallback IFrame)
       const hasChanged =
         playlistTracks.value.length !== ids.length ||
         (playlistTracks.value[0] && playlistTracks.value[0].videoId !== ids[0])
@@ -166,6 +182,9 @@ export const useMusicStore = defineStore('music', () => {
           ytEngine.load(parsedMedia.value, false)
         }
       },
+      onTrackChange: () => {
+        syncTrackInfo()
+      },
       onStateChange: (event) => {
         const state = event.data
         syncTrackInfo()
@@ -183,6 +202,10 @@ export const useMusicStore = defineStore('music', () => {
         } else if (state === 3) {
           // BUFFERING
           isBuffering.value = true
+        } else if (state === 5) {
+          // CUED (lista cargada y lista para reproducir)
+          isBuffering.value = false
+          syncTrackInfo()
         } else if (state === 0) {
           // ENDED
           isPlaying.value = false
@@ -240,6 +263,14 @@ export const useMusicStore = defineStore('music', () => {
 
     if (activeRes.ok && activeRes.data) {
       active.value = activeRes.data
+      if (
+        ytEngine &&
+        currentService.value === 'youtube' &&
+        parsedMedia.value &&
+        playlistTracks.value.length === 0
+      ) {
+        ytEngine.load(parsedMedia.value, false)
+      }
     } else if (playlists.value.length > 0) {
       const defaultPl =
         playlists.value.find((p) => p.service === 'youtube') || playlists.value[0]

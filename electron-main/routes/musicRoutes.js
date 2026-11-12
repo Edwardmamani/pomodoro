@@ -12,5 +12,11 @@ router.handle('pomodoro:music:delete', (e, id) => music.delete(e, id))
 router.handle('pomodoro:music:fetchTrackTitles', (e, ids) =>
   music.fetchTrackTitles(e, ids)
 )
+router.handle('pomodoro:music:fetchPlaylistTracks', (e, playlistId) =>
+  music.fetchPlaylistTracks(e, playlistId)
+)
+router.handle('pomodoro:music:getAudioStream', (e, videoId) =>
+  music.getAudioStream(e, videoId)
+)
 
 module.exports = router

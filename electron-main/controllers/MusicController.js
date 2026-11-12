@@ -4,6 +4,30 @@ const PlaylistModel = require('../models/PlaylistModel')
 const SettingsModel = require('../models/SettingsModel')
 
 const titleCache = new Map()
+const playlistCache = new Map()
+const streamCache = new Map()
+
+const STREAM_TTL_MS = 25 * 60 * 1000 // 25 minutos
+const IOS_USER_AGENT =
+  'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)'
+const DESKTOP_USER_AGENT =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
+function extractPlaylistId(input) {
+  if (!input) return ''
+  const str = String(input).trim()
+  try {
+    if (str.includes('://') || str.includes('list=')) {
+      const url = new URL(str.startsWith('http') ? str : `https://${str}`)
+      const list = url.searchParams.get('list')
+      if (list) return list.trim()
+    }
+  } catch {
+    const match = str.match(/[?&]list=([a-zA-Z0-9_-]+)/)
+    if (match) return match[1]
+  }
+  return str.split('&')[0].trim()
+}
 
 class MusicController {
   constructor() {
@@ -43,7 +67,7 @@ class MusicController {
       service: input.service || 'youtube',
       name,
       externalUrl,
-      externalId: input.external_id || null
+      externalId: input.external_id || extractPlaylistId(externalUrl) || null
     })
     return { ok: true, data: this.playlists.getById(id) }
   }
@@ -66,6 +90,217 @@ class MusicController {
     }
 
     return { ok: true, data: this.activePlaylist() }
+  }
+
+  async fetchPlaylistTracks(_event, rawPlaylistId) {
+    const playlistId = extractPlaylistId(rawPlaylistId)
+    if (!playlistId) return { ok: false, error: 'INVALID_PLAYLIST_ID' }
+
+    if (playlistCache.has(playlistId)) {
+      const cached = playlistCache.get(playlistId)
+      if (Date.now() - cached.timestamp < STREAM_TTL_MS && cached.data.tracks.length > 0) {
+        return { ok: true, data: cached.data }
+      }
+    }
+
+    return new Promise((resolve) => {
+      const url = `https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=es`
+      const req = https.get(
+        url,
+        {
+          headers: {
+            'User-Agent': DESKTOP_USER_AGENT,
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+          }
+        },
+        (res) => {
+          let body = ''
+          res.on('data', (c) => (body += c))
+          res.on('end', () => {
+            try {
+              const match = body.match(/var ytInitialData = (\{.*?\});<\/script>/)
+              if (!match) {
+                resolve({ ok: false, error: 'PARSE_ERROR', data: { playlistId, tracks: [] } })
+                return
+              }
+              const data = JSON.parse(match[1])
+              const playlistTitle =
+                data?.metadata?.playlistMetadataRenderer?.title ||
+                data?.header?.playlistHeaderRenderer?.title?.simpleText ||
+                ''
+
+              const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs || []
+              const sectionContents =
+                tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || []
+              let rawItems = []
+              for (const sec of sectionContents) {
+                const items =
+                  sec?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents
+                if (Array.isArray(items) && items.length > 0) {
+                  rawItems = items
+                  break
+                }
+              }
+
+              const tracks = []
+              for (const item of rawItems) {
+                const v = item.playlistVideoRenderer
+                if (!v || !v.videoId) continue
+                const title =
+                  v.title?.runs?.[0]?.text ||
+                  v.title?.simpleText ||
+                  `Pista ${tracks.length + 1}`
+                const author =
+                  v.shortBylineText?.runs?.[0]?.text ||
+                  v.longBylineText?.runs?.[0]?.text ||
+                  ''
+                const duration = Number(v.lengthSeconds) || 0
+                const durationText = v.lengthText?.simpleText || ''
+                const index = tracks.length
+
+                titleCache.set(v.videoId, { title, author, duration })
+
+                tracks.push({
+                  index,
+                  videoId: v.videoId,
+                  title,
+                  author,
+                  duration,
+                  durationText,
+                  thumbnailUrl: `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`
+                })
+              }
+
+              const payload = { playlistId, title: playlistTitle, tracks }
+              if (tracks.length > 0) {
+                playlistCache.set(playlistId, { timestamp: Date.now(), data: payload })
+              }
+              resolve({ ok: true, data: payload })
+            } catch (err) {
+              resolve({
+                ok: false,
+                error: err.message || 'PARSE_FAILED',
+                data: { playlistId, tracks: [] }
+              })
+            }
+          })
+        }
+      )
+
+      req.on('error', (err) => {
+        resolve({ ok: false, error: err.message, data: { playlistId, tracks: [] } })
+      })
+
+      req.setTimeout(8000, () => {
+        req.destroy()
+        resolve({ ok: false, error: 'TIMEOUT', data: { playlistId, tracks: [] } })
+      })
+    })
+  }
+
+  async getAudioStream(_event, videoId) {
+    const cleanId = String(videoId || '').trim()
+    if (!cleanId) return { ok: false, error: 'INVALID_VIDEO_ID' }
+
+    if (streamCache.has(cleanId)) {
+      const cached = streamCache.get(cleanId)
+      if (Date.now() - cached.timestamp < STREAM_TTL_MS) {
+        return { ok: true, data: cached.data }
+      }
+    }
+
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({
+        videoId: cleanId,
+        context: {
+          client: {
+            clientName: 'IOS',
+            clientVersion: '20.03.02',
+            deviceMake: 'Apple',
+            deviceModel: 'iPhone16,2',
+            osName: 'iPhone',
+            osVersion: '18.2.1.22C161',
+            hl: 'es',
+            gl: 'US'
+          }
+        }
+      })
+
+      const req = https.request(
+        'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+            'User-Agent': IOS_USER_AGENT
+          }
+        },
+        (res) => {
+          let body = ''
+          res.on('data', (c) => (body += c))
+          res.on('end', () => {
+            try {
+              const json = JSON.parse(body)
+              if (json.playabilityStatus?.status !== 'OK') {
+                resolve({
+                  ok: false,
+                  error: json.playabilityStatus?.reason || 'UNPLAYABLE',
+                  status: json.playabilityStatus?.status
+                })
+                return
+              }
+
+              const adaptive = json.streamingData?.adaptiveFormats || []
+              const audioFormats = adaptive.filter(
+                (f) => f.mimeType && f.mimeType.startsWith('audio/') && f.url
+              )
+              // Preferir audio/mp4 (AAC) con mayor bitrate para máxima compatibilidad en HTML5 Audio
+              const mp4Audio = audioFormats
+                .filter((f) => f.mimeType.includes('audio/mp4'))
+                .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+              const best =
+                mp4Audio[0] ||
+                audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0]
+
+              if (!best || !best.url) {
+                resolve({ ok: false, error: 'NO_AUDIO_STREAM' })
+                return
+              }
+
+              const details = json.videoDetails || {}
+              const payload = {
+                videoId: cleanId,
+                url: best.url,
+                mimeType: best.mimeType,
+                bitrate: best.bitrate || 128000,
+                title: details.title || titleCache.get(cleanId)?.title || `Pista ${cleanId}`,
+                author: details.author || titleCache.get(cleanId)?.author || '',
+                duration: Number(details.lengthSeconds) || Math.round(Number(best.approxDurationMs || 0) / 1000) || 0,
+                thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`
+              }
+
+              streamCache.set(cleanId, { timestamp: Date.now(), data: payload })
+              resolve({ ok: true, data: payload })
+            } catch (err) {
+              resolve({ ok: false, error: err.message || 'STREAM_PARSE_ERROR' })
+            }
+          })
+        }
+      )
+
+      req.on('error', (err) => {
+        resolve({ ok: false, error: err.message })
+      })
+
+      req.setTimeout(8000, () => {
+        req.destroy()
+        resolve({ ok: false, error: 'TIMEOUT' })
+      })
+
+      req.write(postData)
+      req.end()
+    })
   }
 
   async fetchTrackTitles(_event, ids) {

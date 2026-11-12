@@ -443,4 +443,38 @@ describe('Reproductor de Música - Pruebas Unitarias', () => {
       assert.strictEqual(engine.getPlaylistIndex(), 1, 'El índice debe volver a ser 1')
     })
   })
+
+  describe('4. Integración Real con YouTube Music (https://music.youtube.com/playlist?list=PLRrXghsZBv6c&si=PMsPS4iNcK6QPtwX)', () => {
+    const FULL_SHARE_URL =
+      'https://music.youtube.com/playlist?list=PLRrXghsZBv6c&si=PMsPS4iNcK6QPtwX'
+
+    test('4.1 Debe extraer las 7 canciones reales de la playlist PLRrXghsZBv6c con título, autor y duración', async () => {
+      const res = await musicController.fetchPlaylistTracks(null, FULL_SHARE_URL)
+
+      assert.strictEqual(res.ok, true, 'fetchPlaylistTracks debe responder ok: true')
+      assert.strictEqual(res.data.playlistId, 'PLRrXghsZBv6c')
+      assert.ok(Array.isArray(res.data.tracks), 'tracks debe ser un arreglo')
+      assert.ok(res.data.tracks.length >= 7, `Se esperaban al menos 7 canciones, obtenidas: ${res.data.tracks.length}`)
+
+      const firstTrack = res.data.tracks[0]
+      assert.strictEqual(firstTrack.videoId, 'Y7iJgvjcg_4')
+      assert.strictEqual(firstTrack.title, 'A Veces')
+      assert.ok(firstTrack.author.includes('AL2'), 'El autor de la primera pista debe ser AL2')
+      assert.ok(firstTrack.duration > 0, 'La duración debe ser mayor a 0 segundos')
+    })
+
+    test('4.2 Debe obtener el stream de audio directo (audio/mp4) reproducible para canciones de la lista', async () => {
+      // Probar tanto la primera pista ('Y7iJgvjcg_4') como 'xDo--w1yg1M' (que antes fallaba en iframe embed)
+      const stream1 = await musicController.getAudioStream(null, 'Y7iJgvjcg_4')
+      assert.strictEqual(stream1.ok, true, 'getAudioStream debe responder ok: true para Y7iJgvjcg_4')
+      assert.ok(stream1.data.url.startsWith('https://'), 'Debe retornar una URL HTTPS de stream válida')
+      assert.ok(stream1.data.mimeType.startsWith('audio/'), 'El mimeType debe ser de audio')
+      assert.strictEqual(stream1.data.title, 'A Veces')
+
+      const stream2 = await musicController.getAudioStream(null, 'xDo--w1yg1M')
+      assert.strictEqual(stream2.ok, true, 'getAudioStream debe responder ok: true para xDo--w1yg1M')
+      assert.ok(stream2.data.url.startsWith('https://'), 'Debe retornar una URL HTTPS de stream válida')
+      assert.strictEqual(stream2.data.title, 'Querer Querernos')
+    })
+  })
 })

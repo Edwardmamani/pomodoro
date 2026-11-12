@@ -2,26 +2,72 @@
   <footer
     class="relative bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-20"
   >
-    <!-- Contenedor del reproductor de YouTube (visible en mini-player o ubicado offscreen para reproducción en segundo plano) -->
+    <!-- Contenedor para compatibilidad con reproductor y Mini-player visual de YouTube Music -->
+    <div id="yt-player-host" class="hidden"></div>
+
     <div
-      class="overflow-hidden transition-all duration-300"
-      :style="
-        music.showMiniPlayer && music.currentService === 'youtube'
-          ? 'position: fixed; bottom: 65px; left: 24px; width: 340px; height: 195px; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); background: #000; z-index: 50; opacity: 1; pointer-events: auto;'
-          : 'position: fixed; top: -9999px; left: -9999px; width: 340px; height: 195px; opacity: 0.01; pointer-events: none; z-index: -50;'
-      "
+      v-if="music.showMiniPlayer && music.currentService === 'youtube'"
+      class="fixed bottom-[65px] left-6 z-40 w-[340px] h-[195px] rounded-2xl overflow-hidden shadow-2xl border border-outline-variant/30 bg-surface-container-low flex flex-col animate-fade-in"
     >
-      <div v-if="music.showMiniPlayer && music.currentService === 'youtube'" class="absolute top-2 right-2 z-40">
-        <button
-          type="button"
-          class="w-7 h-7 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center transition-colors cursor-pointer"
-          title="Minimizar video"
-          @click="music.toggleMiniPlayer"
-        >
-          <span class="material-symbols-outlined text-[16px]">close</span>
-        </button>
+      <div class="relative w-full h-full flex flex-col justify-between p-4 bg-black/80 overflow-hidden">
+        <img
+          v-if="music.currentTrack?.videoId"
+          :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/hqdefault.jpg`"
+          :alt="music.currentTrackTitle"
+          class="absolute inset-0 w-full h-full object-cover opacity-40 blur-[2px] scale-105"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/40"></div>
+
+        <div class="relative z-10 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 font-label-mono-sm text-[11px] text-red-400">
+            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span>YouTube Music · Audio Directo</span>
+          </div>
+          <button
+            type="button"
+            class="w-7 h-7 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center transition-colors cursor-pointer"
+            title="Minimizar reproductor"
+            @click="music.toggleMiniPlayer"
+          >
+            <span class="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+
+        <div class="relative z-10 flex items-center gap-3.5 my-auto">
+          <img
+            v-if="music.currentTrack?.videoId"
+            :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/mqdefault.jpg`"
+            :alt="music.currentTrackTitle"
+            class="w-16 h-16 rounded-xl object-cover shadow-lg border border-white/15 flex-shrink-0"
+          />
+          <div class="min-w-0 flex-1">
+            <p class="font-label-md text-white text-[14px] font-semibold truncate">
+              {{ music.currentTrackTitle }}
+            </p>
+            <p class="font-label-mono-sm text-white/75 text-[11px] truncate mt-0.5">
+              {{ music.currentTrack?.author || music.active?.name }}
+            </p>
+            <p
+              v-if="music.playlistTracks.length > 1"
+              class="font-label-mono-sm text-primary text-[10px] mt-1"
+            >
+              Pista {{ (music.currentTrack?.index ?? 0) + 1 }} de {{ music.playlistTracks.length }}
+            </p>
+          </div>
+        </div>
+
+        <div class="relative z-10 flex items-center justify-between text-white/80 text-[11px] font-label-mono-sm">
+          <span>{{ formattedCurrentTime }} / {{ formattedDuration }}</span>
+          <button
+            type="button"
+            class="text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            @click="music.openQueueModal"
+          >
+            <span class="material-symbols-outlined text-[14px]">queue_music</span>
+            <span>Ver cola ({{ music.playlistTracks.length }})</span>
+          </button>
+        </div>
       </div>
-      <div id="yt-player-host" class="w-full h-full"></div>
     </div>
 
     <!-- Mini-player flotante para Spotify Embed -->
@@ -55,16 +101,27 @@
       <button
         type="button"
         class="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-surface-container-high border border-outline-variant/40 flex items-center justify-center group cursor-pointer shadow-sm transition-transform active:scale-95"
-        :title="music.showMiniPlayer ? 'Ocultar reproductor' : 'Mostrar mini-reproductor de video'"
+        :title="music.showMiniPlayer ? 'Ocultar reproductor' : 'Mostrar mini-reproductor'"
         @click="music.toggleMiniPlayer"
       >
+        <img
+          v-if="music.currentTrack?.videoId"
+          :src="`https://i.ytimg.com/vi/${music.currentTrack.videoId}/mqdefault.jpg`"
+          :alt="music.currentTrackTitle"
+          class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform"
+        />
         <span
-          class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform"
-          :class="music.isPlaying ? 'text-primary animate-pulse' : 'text-on-surface-variant'"
+          class="relative z-10 material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform drop-shadow"
+          :class="
+            music.isPlaying
+              ? 'text-primary animate-pulse bg-black/50 rounded-full p-1'
+              : music.currentTrack?.videoId
+                ? 'text-white bg-black/40 rounded-full p-1'
+                : 'text-on-surface-variant'
+          "
         >
           {{ music.isPlaying ? 'graphic_eq' : 'music_note' }}
         </span>
-        <div class="absolute inset-0 bg-primary/5 group-hover:bg-primary/10 transition-colors"></div>
       </button>
 
       <div class="min-w-0 flex flex-col">
@@ -273,7 +330,7 @@ const formattedDuration = computed(() => {
   if (music.duration > 0) {
     return formatTime(music.duration)
   }
-  return music.isPlaying ? 'EN VIVO' : '—'
+  return '—'
 })
 
 const volumeIcon = computed(() => {

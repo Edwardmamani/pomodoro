@@ -56,7 +56,10 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     open: () => invoke('pomodoro:music:open'),
     add: (input) => invoke('pomodoro:music:add', input),
     delete: (id) => invoke('pomodoro:music:delete', id),
-    fetchTrackTitles: (ids) => invoke('pomodoro:music:fetchTrackTitles', ids)
+    fetchTrackTitles: (ids) => invoke('pomodoro:music:fetchTrackTitles', ids),
+    fetchPlaylistTracks: (playlistId) =>
+      invoke('pomodoro:music:fetchPlaylistTracks', playlistId),
+    getAudioStream: (videoId) => invoke('pomodoro:music:getAudioStream', videoId)
   },
   sound: {
     onPlay: (cb) => {

@@ -82,17 +82,28 @@ app.whenReady().then(() => {
 
   if (session && session.defaultSession) {
     session.defaultSession.webRequest.onBeforeSendHeaders(
-      { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'] },
+      { urls: ['*://*.googlevideo.com/*'] },
       (details, callback) => {
         const requestHeaders = { ...details.requestHeaders }
-        requestHeaders['Referer'] = 'https://www.youtube.com/'
-        requestHeaders['Origin'] = 'https://www.youtube.com'
+        requestHeaders['User-Agent'] =
+          'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)'
+        delete requestHeaders['Referer']
+        delete requestHeaders['Origin']
+        delete requestHeaders['referer']
+        delete requestHeaders['origin']
         callback({ requestHeaders })
       }
     )
 
     session.defaultSession.webRequest.onHeadersReceived(
-      { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.spotify.com/*'] },
+      {
+        urls: [
+          '*://*.youtube.com/*',
+          '*://*.youtube-nocookie.com/*',
+          '*://*.googlevideo.com/*',
+          '*://*.spotify.com/*'
+        ]
+      },
       (details, callback) => {
         const responseHeaders = { ...details.responseHeaders }
         for (const key of Object.keys(responseHeaders)) {
@@ -100,6 +111,9 @@ app.whenReady().then(() => {
           if (lower === 'x-frame-options' || lower === 'frame-options') {
             delete responseHeaders[key]
           }
+        }
+        if (details.url.includes('googlevideo.com')) {
+          responseHeaders['Access-Control-Allow-Origin'] = ['*']
         }
         callback({ responseHeaders })
       }

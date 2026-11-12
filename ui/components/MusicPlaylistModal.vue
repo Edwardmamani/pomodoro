@@ -172,13 +172,19 @@
                 </div>
               </div>
 
-              <!-- Estado -->
-              <div class="flex items-center gap-2 flex-shrink-0">
+              <!-- Estado y duración -->
+              <div class="flex items-center gap-2.5 flex-shrink-0">
+                <span
+                  v-if="track.durationText"
+                  class="font-label-mono-sm text-[11px] text-on-surface-variant"
+                >
+                  {{ track.durationText }}
+                </span>
                 <span
                   v-if="music.currentTrack?.index === track.index"
                   class="font-label-mono-sm text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30"
                 >
-                  {{ music.isPlaying ? 'Reproduciendo' : 'En pausa' }}
+                  {{ music.isPlaying ? 'Reproduciendo' : 'Lista' }}
                 </span>
                 <button
                   type="button"
