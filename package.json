@@ -11,7 +11,9 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "mcp": "node mcp/index.js",
-    "smoke": "ELECTRON_RUN_AS_NODE=1 electron scripts/smoke-services.js"
+    "smoke": "ELECTRON_RUN_AS_NODE=1 electron scripts/smoke-services.js",
+    "test": "ELECTRON_RUN_AS_NODE=1 electron --test tests/**/*.test.js",
+    "test:unit": "ELECTRON_RUN_AS_NODE=1 electron --test tests/music.test.js"
   },
   "keywords": [
     "electron",
