@@ -32,6 +32,13 @@ Module.prototype.require = function (id) {
       ),
       shell: { openExternal: async () => {} },
       dialog: { showSaveDialog: async () => ({ canceled: true }) },
+      session: {
+        defaultSession: {
+          webRequest: {
+            onHeadersReceived() {}
+          }
+        }
+      },
       ipcMain: { handle() {} }
     }
   }
@@ -392,12 +399,98 @@ async function testRoutineTasks() {
   }
 }
 
+// 9. Test de Reproductor de Música (Issue #4: YouTube 1ª opción, Spotify 2ª opción)
+async function testMusic() {
+  const musicController = require('../electron-main/controllers/MusicController')
+  const PlaylistModel = require('../electron-main/models/PlaylistModel')
+  const playlistModel = new PlaylistModel()
+
+  // 9.1 Verificar listas iniciales
+  const listRes = musicController.list()
+  if (!listRes.ok || listRes.data.length < 2) {
+    throw new Error('Listas iniciales de música insuficientes')
+  }
+
+  const ytPlaylists = listRes.data.filter((p) => p.service === 'youtube')
+  const spPlaylists = listRes.data.filter((p) => p.service === 'spotify')
+
+  if (ytPlaylists.length === 0) {
+    throw new Error('No se encontraron listas de YouTube (debe ser la 1ª opción)')
+  }
+  if (spPlaylists.length === 0) {
+    throw new Error('No se encontraron listas de Spotify (debe ser la 2ª opción)')
+  }
+
+  // 9.2 Verificar que la activa por defecto es YouTube
+  const activeRes = musicController.getActive()
+  if (!activeRes.ok || !activeRes.data) {
+    throw new Error('No hay lista de música activa por defecto')
+  }
+  if (activeRes.data.service !== 'youtube') {
+    throw new Error(`La lista activa por defecto debe ser YouTube, obtenido: ${activeRes.data.service}`)
+  }
+
+  // 9.3 Añadir nueva lista de YouTube
+  const newYt = musicController.add(null, {
+    service: 'youtube',
+    name: 'Lo-Fi Chill Beats Extra',
+    external_url: 'https://www.youtube.com/watch?v=5qap5aO4i9A'
+  })
+  if (!newYt.ok || newYt.data.service !== 'youtube') {
+    throw new Error('musicController.add de YouTube falló')
+  }
+
+  // 9.4 Seleccionar lista y verificar persistencia
+  const selectRes = musicController.select(null, newYt.data.id)
+  if (!selectRes.ok || selectRes.data.id !== newYt.data.id) {
+    throw new Error('musicController.select falló')
+  }
+
+  const activeAfterSelect = musicController.getActive()
+  if (activeAfterSelect.data.id !== newYt.data.id) {
+    throw new Error('Lista activa no coincide con la seleccionada')
+  }
+
+  // 9.5 Eliminar lista y verificar fallback automático
+  const deleteRes = musicController.delete(null, newYt.data.id)
+  if (!deleteRes.ok) {
+    throw new Error('musicController.delete falló')
+  }
+  const deletedCheck = playlistModel.getById(newYt.data.id)
+  if (deletedCheck !== null) {
+    throw new Error('La lista eliminada aún existe en la base de datos')
+  }
+  if (!deleteRes.data || deleteRes.data.service !== 'youtube') {
+    throw new Error('Tras eliminar la activa, el fallback debe mantenerse en una lista válida de YouTube')
+  }
+
+  // 9.6 Verificar parser de URLs en frontend
+  const { parseMediaUrl, formatTime } = await import('../ui/lib/music-parser.js')
+  const ytParsed = parseMediaUrl('https://youtu.be/jfKfPfyJRdk')
+  if (!ytParsed || ytParsed.service !== 'youtube' || ytParsed.videoId !== 'jfKfPfyJRdk') {
+    throw new Error('parseMediaUrl falló con enlace corto de YouTube')
+  }
+
+  const spParsed = parseMediaUrl('https://open.spotify.com/playlist/37i9dQZF1DX3Ogo9pFvBkY')
+  if (!spParsed || spParsed.service !== 'spotify' || spParsed.type !== 'playlist') {
+    throw new Error('parseMediaUrl falló con playlist de Spotify')
+  }
+
+  if (formatTime(125) !== '02:05') {
+    throw new Error(`formatTime(125) esperado '02:05', obtenido '${formatTime(125)}'`)
+  }
+  if (formatTime(3665) !== '1:01:05') {
+    throw new Error(`formatTime(3665) esperado '1:01:05', obtenido '${formatTime(3665)}'`)
+  }
+}
+
 async function main() {
   await testStopwatch()
   await testNotes()
   await testRoutineTasks()
+  await testMusic()
   closeConnection()
-  console.log('✅ Smoke tests pasaron exitosamente (Cronómetro + Priorización Vectorial + Rutinas + DB)')
+  console.log('✅ Smoke tests pasaron exitosamente (Cronómetro + Priorización Vectorial + Rutinas + Música YouTube/Spotify + DB)')
 }
 
 main().catch((err) => {

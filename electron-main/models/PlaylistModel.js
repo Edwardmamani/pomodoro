@@ -26,6 +26,10 @@ class PlaylistModel {
       )
       .run(service, name, externalUrl, externalId, now).lastInsertRowid
   }
+
+  delete(id) {
+    return this.db.prepare('DELETE FROM playlists WHERE id = ?').run(id).changes > 0
+  }
 }
 
 module.exports = PlaylistModel

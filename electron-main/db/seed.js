@@ -128,20 +128,52 @@ function runSeed() {
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
     ).run('active_task_id', String(t1))
 
-    const playlistId = insertPlaylist.run(
-      'spotify',
-      'Deep Focus Ambient — Midnight Rain',
-      'https://open.spotify.com/playlist/37i9dQZF1DX3Ogo9pFvBkY',
-      null,
+    const yt1 = insertPlaylist.run(
+      'youtube',
+      'Lofi Girl — Beats to relax/study to',
+      'https://www.youtube.com/watch?v=jfKfPfyJRdk',
+      'jfKfPfyJRdk',
       now
     ).lastInsertRowid
 
+    insertPlaylist.run(
+      'youtube',
+      'Deep Focus — Ambient Study Music',
+      'https://www.youtube.com/watch?v=WPni755-Krg',
+      'WPni755-Krg',
+      now
+    )
+
+    insertPlaylist.run(
+      'youtube',
+      'Synthwave Radio — Chill Beats',
+      'https://www.youtube.com/watch?v=4xDzrJKXOOY',
+      '4xDzrJKXOOY',
+      now
+    )
+
+    insertPlaylist.run(
+      'spotify',
+      'Deep Focus Ambient — Midnight Rain',
+      'https://open.spotify.com/playlist/37i9dQZF1DX3Ogo9pFvBkY',
+      '37i9dQZF1DX3Ogo9pFvBkY',
+      now
+    )
+
+    insertPlaylist.run(
+      'spotify',
+      'Peaceful Piano',
+      'https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO',
+      '37i9dQZF1DX4sWSpwq3LiO',
+      now
+    )
+
     db.prepare(
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
-    ).run('active_playlist_id', String(playlistId))
+    ).run('active_playlist_id', String(yt1))
     db.prepare(
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
-    ).run('last_playlist_id', String(playlistId))
+    ).run('last_playlist_id', String(yt1))
   })
 
   tx()
