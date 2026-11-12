@@ -7,7 +7,8 @@ function emptyFilters() {
     priority: null,
     status: null,
     tag: null,
-    due: null
+    due: null,
+    routine: null
   }
 }
 
@@ -18,13 +19,16 @@ export const useTasksStore = defineStore('tasks', () => {
   const activeTaskId = ref(null)
 
   const openTasks = computed(() => {
+    if (filters.value.routine) {
+      return tasks.value
+    }
     if (filters.value.status === 'cancelled') {
       return tasks.value.filter((t) => t.status === 'cancelled')
     }
     return tasks.value.filter((t) => !['done', 'cancelled'].includes(t.status))
   })
   const doneTasks = computed(() => {
-    if (filters.value.status === 'cancelled') return []
+    if (filters.value.routine || filters.value.status === 'cancelled') return []
     return tasks.value.filter((t) => t.status === 'done')
   })
   const activeTask = computed(
@@ -35,7 +39,7 @@ export const useTasksStore = defineStore('tasks', () => {
 
   const activeFilterCount = computed(() => {
     const f = filters.value
-    return [f.priority, f.status, f.tag, f.due].filter(Boolean).length
+    return [f.priority, f.status, f.tag, f.due, f.routine].filter(Boolean).length
   })
 
   const hasActiveFilters = computed(() => activeFilterCount.value > 0)
@@ -47,6 +51,7 @@ export const useTasksStore = defineStore('tasks', () => {
     if (filters.value.status) out.status = filters.value.status
     if (filters.value.tag) out.tag = filters.value.tag
     if (filters.value.due) out.due = filters.value.due
+    if (filters.value.routine) out.routine = true
     return out
   }
 
@@ -91,14 +96,24 @@ export const useTasksStore = defineStore('tasks', () => {
     return update(id, { status })
   }
 
-  async function update(id, input) {
-    const res = await window.pomodoroAPI.tasks.update(id, input)
+  async function update(id, input, options = {}) {
+    const res = await window.pomodoroAPI.tasks.update(id, input, options)
     if (res.ok) await refresh()
     return res
   }
 
-  async function remove(id) {
-    const res = await window.pomodoroAPI.tasks.remove(id)
+  async function remove(id, options = {}) {
+    const res = await window.pomodoroAPI.tasks.remove(id, options)
+    if (res.ok) await refresh()
+    return res
+  }
+
+  async function getRoutine(routineId) {
+    return window.pomodoroAPI.tasks.getRoutine(routineId)
+  }
+
+  async function updateRoutine(routineId, input) {
+    const res = await window.pomodoroAPI.tasks.updateRoutine(routineId, input)
     if (res.ok) await refresh()
     return res
   }
@@ -148,6 +163,8 @@ export const useTasksStore = defineStore('tasks', () => {
     updateStatus,
     update,
     remove,
+    getRoutine,
+    updateRoutine,
     exportTasks,
     subscribe
   }

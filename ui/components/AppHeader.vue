@@ -2,20 +2,26 @@
   <header
     class="h-16 bg-surface-container-low border-b border-outline-variant/30 px-6 flex items-center justify-between z-10 app-drag"
   >
-    <div class="flex items-center gap-6 app-no-drag">
-      <div class="flex items-center gap-2.5">
-        <span class="font-headline-md text-on-surface tracking-tight"
-          >Pomodoro Serene Focus</span
+    <div class="flex items-center gap-4 app-no-drag">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20 inline-block shadow-xs"></span>
+        <span class="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20 inline-block shadow-xs"></span>
+        <span class="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20 inline-block shadow-xs"></span>
+      </div>
+      <div class="flex items-center gap-2 ml-2">
+        <span class="font-headline-md text-white tracking-tight text-[15px]"
+          >Focus</span
         >
+        <span class="font-label-mono-sm text-on-surface-variant text-[10.5px] px-2 py-0.5 rounded-md bg-white/5 border border-white/5">Cronómetro</span>
       </div>
     </div>
     <div
-      class="flex items-center bg-surface-container px-3 py-1 rounded-full gap-2 app-no-drag"
+      class="flex items-center bg-[#242426] border border-white/10 px-3 py-1 rounded-full gap-2 app-no-drag shadow-sm"
     >
-      <span class="material-symbols-outlined text-secondary text-[16px]"
+      <span class="material-symbols-outlined text-secondary text-[15px]"
         >local_fire_department</span
       >
-      <span class="font-label-mono text-secondary-fixed"
+      <span class="font-label-mono-sm text-secondary font-medium"
         >{{ streak.days }} {{ streak.days === 1 ? 'día' : 'días' }} de
         racha</span
       >

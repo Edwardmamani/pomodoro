@@ -54,17 +54,23 @@
           <span
             class="font-label-mono-sm uppercase tracking-wider text-outline"
             >{{
-              tasks.filters.status === 'cancelled'
-                ? 'Canceladas'
-                : 'Tareas Abiertas'
+              tasks.filters.routine
+                ? 'Rutinas configuradas'
+                : tasks.filters.status === 'cancelled'
+                  ? 'Canceladas'
+                  : 'Tareas Abiertas'
             }}</span
           >
           <span
             class="font-label-mono-sm px-1.5 py-0.2 rounded-full bg-surface-container-high text-primary"
             >{{ tasks.openTasks.length }}
             {{
-              tasks.filters.status === 'cancelled' ? 'cancelada' : 'abierta'
-            }}{{ tasks.openTasks.length === 1 ? '' : 's' }}</span
+              tasks.filters.routine
+                ? (tasks.openTasks.length === 1 ? 'rutina' : 'rutinas')
+                : tasks.filters.status === 'cancelled'
+                  ? (tasks.openTasks.length === 1 ? 'cancelada' : 'canceladas')
+                  : (tasks.openTasks.length === 1 ? 'abierta' : 'abiertas')
+            }}</span
           >
         </header>
 
@@ -74,59 +80,63 @@
           :key="task.id"
           :task="task"
           @select="openTaskNotes"
+          @edit-routine="openEditRoutine"
         />
 
         <!-- Tareas completadas -->
-        <div
-          class="pt-2 mt-1 border-t border-outline-variant/30 flex items-center justify-between px-1 shrink-0"
-        >
-          <span
-            class="font-label-mono-sm uppercase tracking-wider text-outline"
-            >Completadas</span
+        <template v-if="!tasks.filters.routine">
+          <div
+            class="pt-2 mt-1 border-t border-outline-variant/30 flex items-center justify-between px-1 shrink-0"
           >
-          <span
-            class="font-label-mono-sm px-1.5 py-0.2 rounded-full bg-surface-container-high text-outline"
-            >{{ tasks.doneTasks.length }} completada{{
-              tasks.doneTasks.length === 1 ? '' : 's'
-            }}</span
-          >
-        </div>
-
-        <!-- Lista de tareas completadas -->
-        <button
-          v-for="task in tasks.doneTasks"
-          :key="task.id"
-          type="button"
-          class="flex items-start gap-3 p-3 rounded-xl opacity-50 hover:opacity-75 transition-opacity bg-surface-container/40 text-left w-full cursor-pointer"
-        >
-          <div class="mt-0.5 flex-shrink-0" @click.stop>
-            <TaskStatusMenu :task-id="task.id" :status="task.status" />
-          </div>
-          <div class="flex-1 min-w-0">
             <span
-              class="font-body-md line-through truncate text-on-surface-variant block"
-              >{{ task.title }}</span
+              class="font-label-mono-sm uppercase tracking-wider text-outline"
+              >Completadas</span
             >
-            <div
-              class="flex items-center gap-2 mt-1 text-on-surface-variant font-label-mono-sm"
+            <span
+              class="font-label-mono-sm px-1.5 py-0.2 rounded-full bg-surface-container-high text-outline"
+              >{{ tasks.doneTasks.length }} completada{{
+                tasks.doneTasks.length === 1 ? '' : 's'
+              }}</span
             >
-              <span
-                v-if="task.tags[0]"
-                class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
-                >{{ task.tags[0] }}</span
-              >
-              <span v-if="task.due_date">·</span>
-              <span v-if="task.due_date">{{ formatDueDate(task.due_date) }}</span>
-              <span>·</span>
-              <span
-                :class="
-                  task.id === tasks.activeTaskId ? 'text-primary' : ''
-                "
-                >{{ formatAccumulated(liveAccumulated(task)) }}</span
-              >
-            </div>
           </div>
-        </button>
+
+          <!-- Lista de tareas completadas -->
+          <button
+            v-for="task in tasks.doneTasks"
+            :key="task.id"
+            type="button"
+            class="flex items-start gap-3 p-3 rounded-xl opacity-50 hover:opacity-75 transition-opacity bg-surface-container/40 text-left w-full cursor-pointer"
+          >
+            <div class="mt-0.5 flex-shrink-0" @click.stop>
+              <TaskStatusMenu :task-id="task.id" :status="task.status" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <span
+                class="font-body-md line-through truncate text-on-surface-variant block"
+                >{{ task.title }}</span
+              >
+              <div
+                class="flex items-center gap-2 mt-1 text-on-surface-variant font-label-mono-sm"
+              >
+                <span
+                  v-if="task.tags[0]"
+                  class="px-1.5 py-0.5 rounded bg-surface-container text-outline"
+                  >{{ task.tags[0] }}</span
+                >
+                <span class="px-1.5 py-0.5 rounded-full bg-white/5 text-on-surface-variant text-[10px]">P: {{ Number(task.priority_score || 0).toFixed(1) }}</span>
+                <span v-if="task.due_date">·</span>
+                <span v-if="task.due_date">{{ formatDueDate(task.due_date) }}</span>
+                <span>·</span>
+                <span
+                  :class="
+                    task.id === tasks.activeTaskId ? 'text-primary' : ''
+                  "
+                  >{{ formatAccumulated(liveAccumulated(task)) }}</span
+                >
+              </div>
+            </div>
+          </button>
+        </template>
       </div>
 
       <!-- Botones de añadir tarea y exportar tareas -->
@@ -135,15 +145,15 @@
       >
         <button
           type="button"
-          class="flex-1 h-10 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md flex items-center justify-center gap-2 transition-colors"
-          @click="showForm = true"
+          class="flex-1 h-10 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          @click="onAddTask"
         >
           <span class="material-symbols-outlined text-[18px]">add</span>
           <span>Añadir tarea</span>
         </button>
         <button
           type="button"
-          class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
+          class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
           title="Exportar tareas"
           @click="tasks.exportTasks('json')"
         >
@@ -153,7 +163,11 @@
         </button>
       </div>
 
-    <TaskFormModal v-model:open="showForm" />
+    <TaskFormModal
+      v-model:open="showForm"
+      :edit-task="editingTask"
+      @update:open="onModalOpenChange"
+    />
   </aside>
 </template>
 
@@ -172,6 +186,23 @@ const router = useRouter()
 const tasks = useTasksStore()
 const timer = useTimerStore()
 const showForm = ref(false)
+const editingTask = ref(null)
+
+function openEditRoutine(task) {
+  editingTask.value = task
+  showForm.value = true
+}
+
+function onAddTask() {
+  editingTask.value = null
+  showForm.value = true
+}
+
+function onModalOpenChange(val) {
+  if (!val) {
+    editingTask.value = null
+  }
+}
 
 let searchTimer = null
 

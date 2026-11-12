@@ -24,9 +24,14 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     list: (filters) => invoke('pomodoro:tasks:list', filters),
     listTags: () => invoke('pomodoro:tasks:listTags'),
     create: (input) => invoke('pomodoro:tasks:create', input),
-    update: (id, input) => invoke('pomodoro:tasks:update', id, input),
+    update: (id, input, options) =>
+      invoke('pomodoro:tasks:update', id, input, options),
     setActive: (id) => invoke('pomodoro:tasks:setActive', id),
-    remove: (id) => invoke('pomodoro:tasks:delete', id),
+    remove: (id, options) => invoke('pomodoro:tasks:delete', id, options),
+    getRoutine: (routineId) =>
+      invoke('pomodoro:tasks:getRoutine', routineId),
+    updateRoutine: (routineId, input) =>
+      invoke('pomodoro:tasks:updateRoutine', routineId, input),
     export: (format, filters) =>
       invoke('pomodoro:tasks:export', format, filters),
     onChanged: (cb) => {
@@ -49,7 +54,8 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     getActive: () => invoke('pomodoro:music:getActive'),
     select: (id) => invoke('pomodoro:music:select', id),
     open: () => invoke('pomodoro:music:open'),
-    add: (input) => invoke('pomodoro:music:add', input)
+    add: (input) => invoke('pomodoro:music:add', input),
+    delete: (id) => invoke('pomodoro:music:delete', id)
   },
   sound: {
     onPlay: (cb) => {

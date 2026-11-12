@@ -1,59 +1,51 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-on-tertiary-fixed: #00201a;
-  --color-tertiary-fixed: #a0f2dd;
-  --color-on-primary-container: #00311e;
-  --color-tertiary-container: #4d9f8c;
-  --color-tertiary-fixed-dim: #85d6c2;
-  --color-surface-container-high: #252a32;
-  --color-primary-fixed: #99f5c6;
-  --color-error: #ffb4ab;
-  --color-primary: #7ed8ab;
-  --color-surface: #0f141b;
-  --color-on-secondary-fixed-variant: #6f3722;
-  --color-on-tertiary-fixed-variant: #005144;
-  --color-on-secondary-container: #f1a286;
-  --color-on-surface: #dee2ec;
-  --color-primary-fixed-dim: #7ed8ab;
-  --color-inverse-on-surface: #2c3138;
-  --color-inverse-primary: #006c48;
-  --color-on-surface-variant: #bec9c0;
-  --color-on-tertiary: #00382e;
-  --color-on-error-container: #ffdad6;
-  --color-secondary: #ffb59b;
-  --color-on-secondary-fixed: #380d00;
-  --color-on-background: #dee2ec;
-  --color-surface-container-highest: #30353d;
-  --color-outline-variant: #3f4942;
-  --color-on-secondary: #53220e;
-  --color-outline: #88938b;
-  --color-tertiary: #85d6c2;
-  --color-secondary-fixed: #ffdbcf;
-  --color-on-tertiary-container: #003028;
-  --color-inverse-surface: #dee2ec;
-  --color-surface-tint: #7ed8ab;
-  --color-background: #0f141b;
-  --color-on-primary-fixed-variant: #005235;
-  --color-on-error: #690005;
-  --color-surface-bright: #343941;
-  --color-surface-container: #1b2027;
-  --color-surface-dim: #0f141b;
-  --color-on-primary: #003824;
-  --color-secondary-container: #6f3722;
-  --color-surface-container-low: #171c23;
-  --color-error-container: #93000a;
-  --color-on-primary-fixed: #002113;
-  --color-surface-container-lowest: #090f15;
-  --color-primary-container: #46a177;
-  --color-surface-variant: #30353d;
-  --color-secondary-fixed-dim: #ffb59b;
+  --color-primary: #0A84FF;
+  --color-primary-fixed: #0A84FF;
+  --color-primary-fixed-dim: #0071E3;
+  --color-primary-container: #15325b;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #d0e2ff;
 
-  --font-label-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-display-timer: 'Space Grotesk', sans-serif;
-  --font-body-md: 'Plus Jakarta Sans', sans-serif;
-  --font-headline-md: 'Space Grotesk', sans-serif;
-  --font-label-md: 'Plus Jakarta Sans', sans-serif;
+  --color-secondary: #FF9F0A;
+  --color-secondary-fixed: #FF9F0A;
+  --color-secondary-fixed-dim: #E08600;
+  --color-secondary-container: #472d00;
+  --color-on-secondary: #000000;
+  --color-on-secondary-container: #ffe0b2;
+
+  --color-tertiary: #30D158;
+  --color-tertiary-fixed: #30D158;
+  --color-tertiary-fixed-dim: #248A3D;
+  --color-tertiary-container: #0b3d17;
+  --color-on-tertiary: #000000;
+
+  --color-error: #FF453A;
+  --color-error-container: #4d100d;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #ffdcd8;
+
+  --color-surface: #161618;
+  --color-surface-dim: #101012;
+  --color-surface-bright: #2c2c2e;
+  --color-surface-container-lowest: #0c0c0e;
+  --color-surface-container-low: #1c1c1e;
+  --color-surface-container: #242426;
+  --color-surface-container-high: #2c2c2e;
+  --color-surface-container-highest: #3a3a3c;
+
+  --color-on-surface: #f5f5f7;
+  --color-on-surface-variant: #98989d;
+  --color-outline: #545458;
+  --color-outline-variant: rgba(255, 255, 255, 0.12);
+
+  --font-label-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-label-mono-sm: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-display-timer: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-headline-md: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-body-md: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-label-md: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 
 html,
@@ -68,9 +60,10 @@ body,
 body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  background: #0f141b;
-  color: #dee2ec;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  background: #161618;
+  color: #f5f5f7;
   user-select: none;
 }
 
@@ -84,58 +77,60 @@ body {
 }
 
 .font-display-timer {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 88px;
-  line-height: 96px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-size: 84px;
+  line-height: 90px;
   letter-spacing: -0.04em;
-  font-weight: 300;
+  font-weight: 200;
   font-variant-numeric: tabular-nums;
 }
 
 .font-headline-md {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 20px;
-  line-height: 28px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-size: 19px;
+  line-height: 24px;
   letter-spacing: -0.015em;
-  font-weight: 500;
-}
-
-.font-label-md {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 13px;
-  line-height: 18px;
-  letter-spacing: 0.01em;
   font-weight: 600;
 }
 
-.font-label-mono {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  line-height: 16px;
-  letter-spacing: 0.04em;
+.font-label-md {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  letter-spacing: -0.01em;
   font-weight: 500;
 }
 
+.font-label-mono {
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .font-label-mono-sm {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
   font-size: 10px;
   line-height: 14px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 .font-body-md {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  font-size: 13.5px;
   line-height: 20px;
   font-weight: 400;
 }
 
 .font-body-sm {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   font-size: 12px;
   line-height: 18px;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.005em;
   font-weight: 400;
 }
 
@@ -145,4 +140,17 @@ body {
 
 .app-no-drag {
   -webkit-app-region: no-drag;
+}
+
+.apple-glass {
+  background: rgba(36, 36, 38, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.apple-card {
+  background: #242426;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
 }

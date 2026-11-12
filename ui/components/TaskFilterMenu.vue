@@ -157,6 +157,34 @@
           >
         </button>
 
+        <div class="my-1.5 mx-2 border-t border-outline-variant/30"></div>
+
+        <!-- Tipo / Rutinas -->
+        <div
+          class="px-2.5 py-1 font-label-mono-sm uppercase tracking-wider text-outline flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-[12px]">repeat</span>
+          Tipo
+        </div>
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          class="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left font-body-sm text-on-surface hover:bg-surface-container-high transition-colors"
+          :aria-checked="tasks.filters.routine === true"
+          @click.stop="pick('routine', true)"
+        >
+          <span
+            class="material-symbols-outlined text-[16px] shrink-0 text-primary"
+            >repeat</span
+          >
+          <span class="flex-1">Solo rutinarias</span>
+          <span
+            v-if="tasks.filters.routine"
+            class="material-symbols-outlined text-[16px] text-primary"
+            >check</span
+          >
+        </button>
+
         <template v-if="tags.length">
           <div class="my-1.5 mx-2 border-t border-outline-variant/30"></div>
 

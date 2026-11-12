@@ -4,36 +4,30 @@ import { ref, computed } from 'vue'
 export const useTimerStore = defineStore('timer', () => {
   const state = ref({
     status: 'idle',
-    controlMode: 'pomodoro',
-    periodType: 'focus',
-    remainingMs: 25 * 60 * 1000,
-    durationMs: 25 * 60 * 1000,
+    controlMode: 'stopwatch',
+    periodType: 'stopwatch',
+    remainingMs: 0,
+    durationMs: 0,
     elapsedMs: 0,
     segmentElapsedMs: 0,
+    sessionElapsedMs: 0,
     bindingTaskId: null,
     creditedMs: 0,
-    display: '25:00',
+    display: '00:00',
     progress: 0,
     strokeDashoffset: 867,
     circumference: 867,
-    sessionInCycle: 0,
-    completedFocusToday: 0,
-    completedShortBreakToday: 0,
-    completedLongBreakToday: 0
+    completedFocusToday: 0
   })
 
   let unsub = null
 
   const isRunning = computed(() => state.value.status === 'running')
   const isPaused = computed(() => state.value.status === 'paused')
-  const isStopwatch = computed(() => state.value.controlMode === 'stopwatch')
+  const isStopwatch = computed(() => true)
 
-  /** Ms del tramo actual de focus aún no persistidos (tarea bindingTaskId). */
+  /** Ms del tramo actual de cronómetro aún no persistidos */
   const segmentElapsedMs = computed(() => {
-    if (state.value.periodType !== 'focus' && !isStopwatch.value) return 0
-    if (state.value.status !== 'running' && state.value.status !== 'paused') {
-      return 0
-    }
     return Math.max(0, state.value.segmentElapsedMs || 0)
   })
 

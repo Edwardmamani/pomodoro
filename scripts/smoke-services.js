@@ -18,7 +18,7 @@ Module.prototype.require = function (id) {
   if (id === 'electron') {
     return {
       app: {
-        getPath: (name) => (name === 'userData' ? mockUserData : mockUserData)
+        getPath: () => mockUserData
       },
       BrowserWindow: {
         getAllWindows: () => [],
@@ -32,6 +32,13 @@ Module.prototype.require = function (id) {
       ),
       shell: { openExternal: async () => {} },
       dialog: { showSaveDialog: async () => ({ canceled: true }) },
+      session: {
+        defaultSession: {
+          webRequest: {
+            onHeadersReceived() {}
+          }
+        }
+      },
       ipcMain: { handle() {} }
     }
   }
@@ -56,255 +63,437 @@ runMigrations()
 runSeed()
 timer.init()
 
+// 1. Verificar tareas creadas por seed
 const tasks = taskModel.list()
 if (tasks.length < 1) throw new Error('Seed no creó tareas')
 
-const settings = settingsModel.getAll()
-if (settings.focus_minutes !== 25) throw new Error('Settings default incorrecto')
-
-settingsModel.setMany({ focus_minutes: 30 })
-timer.syncDurationsFromSettings()
-const state = timer.getState()
-if (state.durationMs !== 30 * 60 * 1000) {
-  throw new Error(`Timer no sincronizó: ${state.durationMs}`)
+// 2. Verificar cálculo de la fórmula de prioridad vectorial: P = ((I * U) + (D * R)) / E
+const t1 = tasks[0]
+if (typeof t1.priority_score !== 'number' || t1.priority_score <= 0) {
+  throw new Error(`priority_score inválido en tarea seed: ${t1.priority_score}`)
 }
 
+const calculatedScore = TaskModel.calculatePriorityScore(5, 4, 2, 3, 4)
+// (5*4 + 3*4)/2 = (20 + 12)/2 = 16.00
+if (calculatedScore !== 16.00) {
+  throw new Error(`Cálculo de score incorrecto: esperado 16.00, obtenido ${calculatedScore}`)
+}
+
+// 3. Crear nueva tarea con vector de 5 variables
 const created = taskController.create(null, {
-  title: 'Smoke task',
-  priority: 'low',
-  tags: ['Test']
+  title: 'Tarea con Vector de Prioridad',
+  impact: 5,
+  urgency: 5,
+  effort: 1,
+  dependencies: 5,
+  risk: 5,
+  tags: ['Prioritaria']
 })
 if (!created.ok) throw new Error('create falló')
 
+// Con I=5, U=5, E=1, D=5, R=5 => P = (25 + 25) / 1 = 50.00
+if (created.data.priority_score !== 50.00) {
+  throw new Error(`priority_score esperado 50.00, obtenido ${created.data.priority_score}`)
+}
+
+// 4. Verificar que se ordena por prioridad descendente entre tareas pendientes
+const todoTasks = taskModel.list({ status: 'todo' })
+if (todoTasks[0].id !== created.data.id) {
+  throw new Error(`La tarea con mayor puntaje debe ser la primera en 'todo': esperado ${created.data.id}, obtenido ${todoTasks[0].id}`)
+}
+
+// 4.1 Test de Urgencia Dinámica calculada por fecha de finalización
+const { localDay, addDaysLocal } = require('../electron-main/lib/date')
+const today = localDay()
+const tomorrow = addDaysLocal(today, 1)
+const in3Days = addDaysLocal(today, 3)
+const in6Days = addDaysLocal(today, 6)
+const in15Days = addDaysLocal(today, 15)
+
+const taskToday = taskController.create(null, {
+  title: 'Vence hoy',
+  due_date: today,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskToday.data.urgency !== 5) {
+  throw new Error(`Urgencia esperada 5 para vence hoy, obtenido: ${taskToday.data.urgency}`)
+}
+
+const taskTomorrow = taskController.create(null, {
+  title: 'Vence mañana',
+  due_date: tomorrow,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskTomorrow.data.urgency !== 4) {
+  throw new Error(`Urgencia esperada 4 para vence mañana, obtenido: ${taskTomorrow.data.urgency}`)
+}
+
+const task3Days = taskController.create(null, {
+  title: 'Vence en 3 días',
+  due_date: in3Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task3Days.data.urgency !== 3) {
+  throw new Error(`Urgencia esperada 3 para vence en 3 días, obtenido: ${task3Days.data.urgency}`)
+}
+
+const task6Days = taskController.create(null, {
+  title: 'Vence en 6 días',
+  due_date: in6Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task6Days.data.urgency !== 2) {
+  throw new Error(`Urgencia esperada 2 para vence en 6 días, obtenido: ${task6Days.data.urgency}`)
+}
+
+const task15Days = taskController.create(null, {
+  title: 'Vence en 15 días',
+  due_date: in15Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (task15Days.data.urgency !== 1) {
+  throw new Error(`Urgencia esperada 1 para vence en 15 días, obtenido: ${task15Days.data.urgency}`)
+}
+
+// Test de edición: Al cambiar fecha de finalización, se recalcula urgencia y score
+const taskEdit = taskController.create(null, {
+  title: 'Tarea para editar fecha',
+  due_date: in15Days,
+  impact: 4,
+  effort: 2,
+  dependencies: 1,
+  risk: 2
+})
+if (taskEdit.data.urgency !== 1) throw new Error('Urgencia inicial debe ser 1')
+
+const updatedTask = taskController.update(null, taskEdit.data.id, {
+  due_date: today
+})
+if (updatedTask.data.urgency !== 5) {
+  throw new Error(`Urgencia tras editar debe ser 5, obtenido: ${updatedTask.data.urgency}`)
+}
+if (updatedTask.data.priority_score !== 11.00) {
+  throw new Error(`Score tras editar fecha esperado 11.00, obtenido: ${updatedTask.data.priority_score}`)
+}
+
+// 5. Activar tarea para el cronómetro
 const active = taskController.setActive(null, created.data.id)
 if (!active.ok) throw new Error('setActive falló')
 
-settingsModel.setMany({ focus_minutes: 25 })
-timer.reset()
-
-const streak = streakController.getStreak()
-if (typeof streak.days !== 'number') throw new Error('streak inválido')
-
-async function testPersistOnQuit() {
-  timer.start(null)
-  await new Promise((r) => setTimeout(r, 1200))
-
-  const beforeQuit = timer.getState()
-  if (beforeQuit.status !== 'running') {
-    throw new Error('Timer debería estar running antes de persistForQuit')
-  }
-
-  timer.persistForQuit()
-  const paused = timer.getState()
-  if (paused.status !== 'paused') {
-    throw new Error(`Tras quit debería estar paused, got ${paused.status}`)
-  }
-  if (paused.remainingMs >= beforeQuit.durationMs) {
-    throw new Error('remainingMs no avanzó')
-  }
-
-  const taskRows = taskModel.list()
-  const task = taskRows.find((t) => t.id === created.data.id)
-  if (!task || task.accumulated_ms < 500) {
-    throw new Error(
-      `Tiempo de tarea no flusheado: ${task && task.accumulated_ms}`
-    )
-  }
-
-  const remainingSaved = paused.remainingMs
-  const creditedSaved = paused.creditedMs
-  timer.init()
-  const restored = timer.getState()
-  if (restored.status !== 'paused') {
-    throw new Error(`Tras init debería restaurar paused, got ${restored.status}`)
-  }
-  if (Math.abs(restored.remainingMs - remainingSaved) > 5) {
-    throw new Error(
-      `remainingMs restaurado distinto: ${restored.remainingMs} vs ${remainingSaved}`
-    )
-  }
-  if (restored.bindingTaskId !== created.data.id) {
-    throw new Error('bindingTaskId no restaurado')
-  }
-  if (Math.abs(restored.creditedMs - creditedSaved) > 5) {
-    throw new Error('creditedMs no restaurado')
-  }
-
-  // Segunda init sin snapshot no debe re-aplicar estado pausado
-  timer.init()
-  const idleAgain = timer.getState()
-  if (idleAgain.status !== 'idle') {
-    throw new Error('Snapshot debería consumirse tras restaurar')
-  }
+const activeList = taskModel.list()
+if (activeList[0].id !== created.data.id) {
+  throw new Error('La tarea activa de mayor puntaje debe ser la primera de la lista')
 }
 
-async function testControlModeSwitch() {
-  settingsModel.setMany({ focus_minutes: 25 })
+// 6. Test Cronómetro: Start, Pause, Resume, Reset
+async function testStopwatch() {
   timer.reset()
-  timer.setMode(null, 'focus')
+  const initial = timer.getState()
+  if (initial.controlMode !== 'stopwatch') {
+    throw new Error('El temporizador debe operar en modo cronómetro')
+  }
 
   const startRes = timer.start(null)
-  if (!startRes.ok) throw new Error('start falló en testControlModeSwitch')
-  await new Promise((r) => setTimeout(r, 1100))
+  if (!startRes.ok) throw new Error('start falló')
+  await new Promise((r) => setTimeout(r, 1200))
 
-  const before = timer.getState()
-  if (before.controlMode !== 'pomodoro') {
-    throw new Error('Debería estar en pomodoro')
+  const running = timer.getState()
+  if (running.status !== 'running') {
+    throw new Error('Cronómetro debería estar running')
   }
-  const remainingBefore = before.remainingMs
-
-  const toSw = timer.setControlMode(null, 'stopwatch')
-  if (!toSw.ok) throw new Error('setControlMode stopwatch falló')
-  const sw = timer.getState()
-  if (sw.controlMode !== 'stopwatch') {
-    throw new Error('No cambió a stopwatch')
-  }
-  if (sw.status !== 'running') {
-    throw new Error('Cronómetro debería seguir running')
-  }
-  // Display cuenta desde tiempo dedicado a la tarea (>= tiempo ya flusheado)
-  if (typeof sw.display !== 'string' || !sw.display.includes(':')) {
-    throw new Error(`Display cronómetro inválido: ${sw.display}`)
+  if (running.elapsedMs < 1000) {
+    throw new Error(`elapsedMs no avanzó: ${running.elapsedMs}`)
   }
 
-  await new Promise((r) => setTimeout(r, 1100))
-  const mid = timer.getState()
-  if (mid.elapsedMs < 500) {
-    throw new Error('Cronómetro no avanzó el display de la tarea')
+  const pauseRes = timer.pause()
+  if (!pauseRes.ok) throw new Error('pause falló')
+  const paused = timer.getState()
+  if (paused.status !== 'paused') {
+    throw new Error('Cronómetro debería estar paused')
   }
 
-  const focusBefore = mid.completedFocusToday
-  const back = timer.setControlMode(null, 'pomodoro')
-  if (!back.ok) throw new Error('vuelta a pomodoro falló')
-  const after = timer.getState()
-  if (after.controlMode !== 'pomodoro') {
-    throw new Error('No volvió a pomodoro')
-  }
-  // remaining = remainingBefore - workInStopwatch ≈ remainingBefore - 1100ms (más el 1er segundo ya no está en remaining del pomodoro al cambiar)
-  // Al entrar a stopwatch se congeló remainingBefore; luego ~1.1s de work
-  if (after.remainingMs > remainingBefore) {
-    throw new Error(
-      `remaining debería bajar o igualar tras cronómetro: ${after.remainingMs} > ${remainingBefore}`
-    )
-  }
-  if (after.remainingMs > remainingBefore - 500) {
-    throw new Error(
-      `remaining no restó el tiempo de cronómetro: ${after.remainingMs} vs ${remainingBefore}`
-    )
-  }
-  if (after.completedFocusToday < focusBefore) {
-    throw new Error('completedFocusToday no debería bajar')
+  // Verificar que el tiempo se acumuló a la tarea activa
+  const taskAfterPause = taskModel.getById(created.data.id)
+  if (!taskAfterPause || taskAfterPause.accumulated_ms < 500) {
+    throw new Error(`Tiempo acumulado no registrado en tarea: ${taskAfterPause && taskAfterPause.accumulated_ms}`)
   }
 
-  // Caso sesiones: focus muy corto para completar ≥1 sesión en cronómetro
-  settingsModel.setMany({ focus_minutes: 0.05 }) // 3s
   timer.reset()
-  timer.setMode(null, 'focus')
-  timer.start(null)
-  await new Promise((r) => setTimeout(r, 200))
-  const focusAtSwitch = timer.getState().completedFocusToday
-  timer.setControlMode(null, 'stopwatch')
-  await new Promise((r) => setTimeout(r, 3500))
-  timer.setControlMode(null, 'pomodoro')
-  const afterSessions = timer.getState()
-  if (afterSessions.completedFocusToday < focusAtSwitch + 1) {
-    throw new Error(
-      `Cronómetro debería completar ≥1 focus: ${afterSessions.completedFocusToday} vs ${focusAtSwitch}`
-    )
+  const resetState = timer.getState()
+  if (resetState.status !== 'idle') {
+    throw new Error('Cronómetro debería estar idle tras reset')
   }
-
-  settingsModel.setMany({ focus_minutes: 25 })
-  timer.reset()
 }
 
-function taskAccumulated(taskId) {
-  const row = taskModel.list().find((t) => t.id === taskId)
-  return row ? Number(row.accumulated_ms) || 0 : 0
+// 7. Test de Notas
+async function testNotes() {
+  const noteModel = new NoteModel()
+  const content = '# Nota de prueba en Markdown\nContenido de prueba'
+  const saved = await noteModel.write(created.data.id, content)
+  if (!saved) throw new Error('noteModel.write falló')
+
+  const loaded = await noteModel.read(created.data.id)
+  if (!loaded || loaded.content !== content) {
+    throw new Error('noteModel.read contenido distinto')
+  }
 }
 
-async function testNoDoubleCountOnModeSwitch() {
-  settingsModel.setMany({ focus_minutes: 25 })
-  timer.reset()
-  timer.setMode(null, 'focus')
-  timer.start(null)
-  await new Promise((r) => setTimeout(r, 1500))
+// 8. Test de Tareas Rutinarias (Issue #2)
+async function testRoutineTasks() {
+  const { getDayOfWeek, formatDateLongSpanish } = require('../electron-main/lib/date')
+  const RoutineModel = require('../electron-main/models/RoutineModel')
+  const routineModel = new RoutineModel()
 
-  const taskId = created.data.id
+  const currentDayOfWeek = getDayOfWeek(today)
 
-  // Entrar a cronómetro flushea el tramo de focus (~1.5s)
-  timer.setControlMode(null, 'stopwatch')
-  const afterEnterSw = taskAccumulated(taskId)
-  if (afterEnterSw < 500) {
-    throw new Error(`Flush al entrar a cronómetro falló: ${afterEnterSw}`)
+  // 8.1 Crear rutina activa que incluye hoy
+  const routineRes = taskController.create(null, {
+    title: 'Repaso Anki Diario',
+    is_routine: true,
+    days_of_week: [1, 2, 3, 4, 5, 6, 7],
+    impact: 4,
+    effort: 2,
+    tags: ['Estudio', 'Rutina']
+  })
+
+  if (!routineRes.ok || !routineRes.routineId || !routineRes.data) {
+    throw new Error('Creación de tarea rutinaria para hoy falló')
   }
 
-  await new Promise((r) => setTimeout(r, 400))
-  timer.setControlMode(null, 'pomodoro')
-
-  const afterBack = taskAccumulated(taskId)
-  const stopwatchDelta = afterBack - afterEnterSw
-  if (stopwatchDelta > 2000) {
-    throw new Error(
-      `Cronómetro acreditó de más: +${stopwatchDelta}ms (enter ${afterEnterSw}, back ${afterBack})`
-    )
+  const routineTaskToday = routineRes.data
+  if (routineTaskToday.routine_id !== routineRes.routineId) {
+    throw new Error(`routine_id en tarea creada incorrecto: ${routineTaskToday.routine_id}`)
+  }
+  if (routineTaskToday.due_date !== today) {
+    throw new Error(`due_date esperado ${today}, obtenido ${routineTaskToday.due_date}`)
   }
 
-  const st = timer.getState()
-  const elapsed = st.elapsedMs || 0
-  const credited = st.creditedMs || 0
-  if (Math.abs(elapsed - credited) > 50) {
-    throw new Error(
-      `Tras volver, creditedMs debe igualar elapsed para no re-sumar: elapsed=${elapsed} credited=${credited}`
-    )
+  // 8.2 Crear rutina para días que NO incluyen hoy -> no debe crearse tarea hoy
+  const otherDay = (currentDayOfWeek % 7) + 1
+  const futureRoutineRes = taskController.create(null, {
+    title: 'Rutina día alterno',
+    is_routine: true,
+    days_of_week: [otherDay],
+    impact: 3
+  })
+
+  if (!futureRoutineRes.ok || !futureRoutineRes.routineId) {
+    throw new Error('Creación de plantilla de rutina futura falló')
+  }
+  if (futureRoutineRes.data !== null) {
+    throw new Error('No debe crearse tarea para hoy si hoy no es uno de los días configurados')
   }
 
-  // Un flush posterior no debe re-acreditar el tramo ya contado
-  timer.persistForQuit()
-  const afterPersist = taskAccumulated(taskId)
-  if (afterPersist - afterBack > 100) {
-    throw new Error(
-      `persistForQuit re-acreditó tiempo ya contado: +${afterPersist - afterBack}ms`
-    )
+  // 8.3 Comprobar sincronización diaria (sin duplicar si ya existe)
+  const countBeforeSync = taskModel.list({ routine_id: routineRes.routineId }).length
+  taskModel.syncDailyRoutines(today)
+  const countAfterSync = taskModel.list({ routine_id: routineRes.routineId }).length
+  if (countBeforeSync !== countAfterSync || countAfterSync !== 1) {
+    throw new Error(`syncDailyRoutines duplicó la tarea de hoy: esperado 1, obtenido ${countAfterSync}`)
   }
 
-  timer.init()
-  timer.reset()
+  // 8.4 Comprobar archivo .md compartido con encabezado automático
+  const noteLoad = await notesController.load(null, routineTaskToday.id)
+  if (!noteLoad.ok || !noteLoad.data.isRoutine) {
+    throw new Error('notesController.load no reconoció tarea rutinaria')
+  }
+
+  const expectedHeader = `### ${formatDateLongSpanish(today)}`
+  if (!noteLoad.data.content.includes(expectedHeader)) {
+    throw new Error(`Contenido de nota no incluye encabezado esperado: "${expectedHeader}"`)
+  }
+
+  // Guardar notas para hoy
+  const updatedNoteContent = noteLoad.data.content + '\n- Vocabulario repaso 20 palabras completado.'
+  const noteSave = await notesController.save(null, routineTaskToday.id, updatedNoteContent)
+  if (!noteSave.ok) throw new Error('Guardado de nota rutinaria falló')
+
+  // Simular otra instancia de la misma rutina (ej. otro día) para verificar que comparten el mismo archivo
+  const fakeAnotherDayTaskId = taskModel.create({
+    title: 'Repaso Anki Diario',
+    due_date: '2026-11-01',
+    routineId: routineRes.routineId
+  })
+  const noteLoadAnotherDay = await notesController.load(null, fakeAnotherDayTaskId)
+  if (!noteLoadAnotherDay.data.content.includes('Vocabulario repaso 20 palabras completado')) {
+    throw new Error('Las instancias de la rutina no están compartiendo el mismo archivo note.md')
+  }
+
+  // 8.5 Actualización con scope: 'all'
+  const updateAllRes = taskController.update(
+    null,
+    routineTaskToday.id,
+    { title: 'Repaso Anki Pro' },
+    { scope: 'all' }
+  )
+  if (!updateAllRes.ok) throw new Error('update con scope all falló')
+  const routineInDb = routineModel.getById(routineRes.routineId)
+  if (!routineInDb || routineInDb.title !== 'Repaso Anki Pro') {
+    throw new Error('update con scope all no actualizó la plantilla en routines')
+  }
+
+  // 8.6 Eliminación con scope: 'all'
+  const removeRes = taskController.remove(null, routineTaskToday.id, { scope: 'all' })
+  if (!removeRes.ok) throw new Error('remove con scope all falló')
+  const routineAfterDelete = routineModel.getById(routineRes.routineId)
+  if (routineAfterDelete !== null) {
+    throw new Error('remove con scope all no eliminó la rutina de la tabla routines')
+  }
+  const remainingTasks = taskModel.list({ routine_id: routineRes.routineId })
+  if (remainingTasks.length !== 0) {
+    throw new Error('remove con scope all no eliminó en cascada las tareas de la rutina')
+  }
+
+  // 8.7 Filtro de rutinas y actualización de días para rutinas no programadas hoy
+  const anotherDay = currentDayOfWeek === 7 ? 1 : currentDayOfWeek + 1
+  const notTodayRoutineRes = taskController.create(null, {
+    title: 'Rutina en otro día',
+    days_of_week: [anotherDay],
+    is_routine: true
+  })
+  if (!notTodayRoutineRes.ok) throw new Error('Falló creación de rutina no programada hoy')
+
+  // Listar con filtro { routine: true }
+  const routineListRes = taskController.list(null, { routine: true })
+  if (!routineListRes.ok) throw new Error('taskController.list con { routine: true } falló')
+  const foundTemplate = routineListRes.data.find((r) => r.routine_id === notTodayRoutineRes.routineId)
+  if (!foundTemplate) throw new Error('No se encontró la rutina plantilla en el filtro routine')
+  if (!foundTemplate.is_routine_template || foundTemplate.is_active_today) {
+    throw new Error('La rutina no programada para hoy debe tener is_routine_template=true y is_active_today=false')
+  }
+
+  // Actualizar días para incluir el día de hoy
+  const updateRoutineDaysRes = taskController.updateRoutine(null, notTodayRoutineRes.routineId, {
+    title: 'Rutina en otro día (ahora hoy)',
+    days_of_week: [anotherDay, currentDayOfWeek]
+  })
+  if (!updateRoutineDaysRes.ok) throw new Error('updateRoutine falló')
+
+  // Verificar que syncDailyRoutines instanció la tarea para hoy
+  const routineListAfterRes = taskController.list(null, { routine: true })
+  const updatedItem = routineListAfterRes.data.find((r) => r.routine_id === notTodayRoutineRes.routineId)
+  if (!updatedItem || !updatedItem.is_active_today) {
+    throw new Error('Tras agregar el día de hoy a la rutina, debe ser is_active_today=true')
+  }
+
+  // Eliminar la plantilla usando id virtual routine_<id>
+  const removeTemplateRes = taskController.remove(null, `routine_${notTodayRoutineRes.routineId}`)
+  if (!removeTemplateRes.ok) throw new Error('remove con id virtual routine_<id> falló')
+  if (routineModel.getById(notTodayRoutineRes.routineId) !== null) {
+    throw new Error('remove con id virtual routine_<id> no eliminó la rutina')
+  }
 }
 
-testPersistOnQuit()
-  .then(() => testControlModeSwitch())
-  .then(() => testNoDoubleCountOnModeSwitch())
-  .then(async () => {
-    const taskId = created.data.id
-    const saveRes = await notesController.save(null, taskId, '# Nota smoke\n\nHola')
-    if (!saveRes.ok) throw new Error('notes.save failed')
-    const loadRes = await notesController.load(null, taskId)
-    if (!loadRes.ok || loadRes.data.content !== '# Nota smoke\n\nHola') {
-      throw new Error('notes.load mismatch')
-    }
-    if (!fs.existsSync(loadRes.data.filePath)) {
-      throw new Error('note.md missing on disk')
-    }
-    new NoteModel().removeForTask(taskId)
-    if (fs.existsSync(path.dirname(loadRes.data.filePath))) {
-      throw new Error('task note dir not removed')
-    }
+// 9. Test de Reproductor de Música (Issue #4: YouTube 1ª opción, Spotify 2ª opción)
+async function testMusic() {
+  const musicController = require('../electron-main/controllers/MusicController')
+  const PlaylistModel = require('../electron-main/models/PlaylistModel')
+  const playlistModel = new PlaylistModel()
+
+  // 9.1 Verificar listas iniciales
+  const listRes = musicController.list()
+  if (!listRes.ok || listRes.data.length < 2) {
+    throw new Error('Listas iniciales de música insuficientes')
+  }
+
+  const ytPlaylists = listRes.data.filter((p) => p.service === 'youtube')
+  const spPlaylists = listRes.data.filter((p) => p.service === 'spotify')
+
+  if (ytPlaylists.length === 0) {
+    throw new Error('No se encontraron listas de YouTube (debe ser la 1ª opción)')
+  }
+  if (spPlaylists.length === 0) {
+    throw new Error('No se encontraron listas de Spotify (debe ser la 2ª opción)')
+  }
+
+  // 9.2 Verificar que la activa por defecto es YouTube
+  const activeRes = musicController.getActive()
+  if (!activeRes.ok || !activeRes.data) {
+    throw new Error('No hay lista de música activa por defecto')
+  }
+  if (activeRes.data.service !== 'youtube') {
+    throw new Error(`La lista activa por defecto debe ser YouTube, obtenido: ${activeRes.data.service}`)
+  }
+
+  // 9.3 Añadir nueva lista de YouTube
+  const newYt = musicController.add(null, {
+    service: 'youtube',
+    name: 'Lo-Fi Chill Beats Extra',
+    external_url: 'https://www.youtube.com/watch?v=5qap5aO4i9A'
   })
-  .then(() => {
-    closeConnection()
-    console.log('SMOKE_OK', {
-      tasks: tasks.length,
-      created: created.data.id,
-      streak: streak.days,
-      db: dbFile
-    })
-  })
-  .catch((err) => {
-    console.error(err)
-    try {
-      closeConnection()
-    } catch {
-      /* ignore */
-    }
-    process.exit(1)
-  })
+  if (!newYt.ok || newYt.data.service !== 'youtube') {
+    throw new Error('musicController.add de YouTube falló')
+  }
+
+  // 9.4 Seleccionar lista y verificar persistencia
+  const selectRes = musicController.select(null, newYt.data.id)
+  if (!selectRes.ok || selectRes.data.id !== newYt.data.id) {
+    throw new Error('musicController.select falló')
+  }
+
+  const activeAfterSelect = musicController.getActive()
+  if (activeAfterSelect.data.id !== newYt.data.id) {
+    throw new Error('Lista activa no coincide con la seleccionada')
+  }
+
+  // 9.5 Eliminar lista y verificar fallback automático
+  const deleteRes = musicController.delete(null, newYt.data.id)
+  if (!deleteRes.ok) {
+    throw new Error('musicController.delete falló')
+  }
+  const deletedCheck = playlistModel.getById(newYt.data.id)
+  if (deletedCheck !== null) {
+    throw new Error('La lista eliminada aún existe en la base de datos')
+  }
+  if (!deleteRes.data || deleteRes.data.service !== 'youtube') {
+    throw new Error('Tras eliminar la activa, el fallback debe mantenerse en una lista válida de YouTube')
+  }
+
+  // 9.6 Verificar parser de URLs en frontend
+  const { parseMediaUrl, formatTime } = await import('../ui/lib/music-parser.js')
+  const ytParsed = parseMediaUrl('https://youtu.be/jfKfPfyJRdk')
+  if (!ytParsed || ytParsed.service !== 'youtube' || ytParsed.videoId !== 'jfKfPfyJRdk') {
+    throw new Error('parseMediaUrl falló con enlace corto de YouTube')
+  }
+
+  const spParsed = parseMediaUrl('https://open.spotify.com/playlist/37i9dQZF1DX3Ogo9pFvBkY')
+  if (!spParsed || spParsed.service !== 'spotify' || spParsed.type !== 'playlist') {
+    throw new Error('parseMediaUrl falló con playlist de Spotify')
+  }
+
+  if (formatTime(125) !== '02:05') {
+    throw new Error(`formatTime(125) esperado '02:05', obtenido '${formatTime(125)}'`)
+  }
+  if (formatTime(3665) !== '1:01:05') {
+    throw new Error(`formatTime(3665) esperado '1:01:05', obtenido '${formatTime(3665)}'`)
+  }
+}
+
+async function main() {
+  await testStopwatch()
+  await testNotes()
+  await testRoutineTasks()
+  await testMusic()
+  closeConnection()
+  console.log('✅ Smoke tests pasaron exitosamente (Cronómetro + Priorización Vectorial + Rutinas + Música YouTube/Spotify + DB)')
+}
+
+main().catch((err) => {
+  console.error('❌ Falló smoke test:', err)
+  process.exit(1)
+})

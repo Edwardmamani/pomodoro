@@ -37,7 +37,7 @@
           <div @click.stop>
             <TaskPriorityMenu
               :task-id="task.id"
-              :priority="task.priority"
+              :task="task"
             />
           </div>
         </div>
@@ -162,29 +162,36 @@
           </button>
 
           <span class="pointer-events-none">·</span>
-          <span class="inline-flex items-center gap-0.5" @click.stop>
-            <span :class="isActive ? 'text-primary' : ''">{{
-              task.completed_pomodoros
-            }}</span>
-            <span>/</span>
-            <input
-              type="number"
-              min="0"
-              max="99"
-              class="w-8 h-5 px-0.5 bg-transparent border-0 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:outline-none focus:ring-0"
-              :class="isActive ? 'text-primary' : ''"
-              :value="task.estimated_pomodoros"
-              title="Pomodoros estimados"
-              @change="saveEstimated($event.target.value)"
-            />
-            <span :class="isActive ? 'text-primary' : ''">pomos</span>
-          </span>
-          <span class="pointer-events-none">·</span>
           <span
-            class="pointer-events-none"
-            :class="isActive ? 'text-primary' : ''"
-            >{{ formatAccumulated(liveAccumulated) }}</span
+            class="inline-flex items-center gap-1 font-label-mono-sm font-medium"
+            :class="isActive ? 'text-primary' : 'text-on-surface-variant'"
+            title="Tiempo acumulado de concentración"
           >
+            <span class="material-symbols-outlined text-[13px]">timer</span>
+            <span>{{ formatAccumulated(liveAccumulated) }}</span>
+          </span>
+
+          <button
+            v-if="task.routine_id || task.is_routine"
+            type="button"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 hover:bg-primary/25 text-primary text-[10px] font-semibold transition-colors cursor-pointer group/routine"
+            :title="`Configurar rutina: ${daysSummaryLabel}. Haz clic para editar días u opciones.`"
+            @click.stop="emit('edit-routine', task)"
+          >
+            <span class="material-symbols-outlined text-[12px]">cached</span>
+            <span>Rutina</span>
+            <span v-if="daysAbbrev" class="font-normal opacity-85">({{ daysAbbrev }})</span>
+            <span class="material-symbols-outlined text-[10px] opacity-60 group-hover/routine:opacity-100 transition-opacity">edit</span>
+          </button>
+
+          <span
+            v-if="task.is_routine_template && !task.is_active_today"
+            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant/80 text-[10px] font-medium"
+            title="Esta rutina no está programada para hoy"
+          >
+            <span class="material-symbols-outlined text-[11px]">event_busy</span>
+            <span>No programada hoy</span>
+          </span>
         </div>
       </div>
     </div>
@@ -197,7 +204,7 @@
         title="Eliminar tarea"
         :aria-label="`Eliminar ${task.title}`"
         :disabled="removing"
-        @click="confirmDelete = true"
+        @click="handleDeleteClick"
       >
         <span class="material-symbols-outlined text-[16px]">delete</span>
       </button>
@@ -211,6 +218,14 @@
     confirm-label="Eliminar"
     @confirm="onDelete"
   />
+
+  <RoutineScopeModal
+    v-model:open="showScopeModal"
+    :action="scopeAction"
+    :task-title="task.title"
+    @select="onRoutineScopeSelect"
+    @cancel="onRoutineScopeCancel"
+  />
 </template>
 
 <script setup>
@@ -223,13 +238,52 @@ import { tagDotColor } from '@/lib/tag-color'
 import TaskStatusMenu from '@/components/TaskStatusMenu.vue'
 import TaskPriorityMenu from '@/components/TaskPriorityMenu.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import RoutineScopeModal from '@/components/RoutineScopeModal.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },
   navigateOnSelect: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'edit-routine'])
+
+const WEEKDAY_ABBREVS = {
+  1: 'L',
+  2: 'M',
+  3: 'X',
+  4: 'J',
+  5: 'V',
+  6: 'S',
+  7: 'D'
+}
+
+const WEEKDAY_NAMES = {
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado',
+  7: 'Domingo'
+}
+
+const daysAbbrev = computed(() => {
+  const d = props.task.days_of_week
+  if (!d || !d.length) return ''
+  if (d.length === 7) return 'Todos los días'
+  if (d.length === 5 && [1, 2, 3, 4, 5].every((v) => d.includes(v))) return 'L-V'
+  if (d.length === 6 && [1, 2, 3, 4, 5, 6].every((v) => d.includes(v))) return 'L-S'
+  return d.map((id) => WEEKDAY_ABBREVS[id] || id).join(',')
+})
+
+const daysSummaryLabel = computed(() => {
+  const d = props.task.days_of_week
+  if (!d || !d.length) return 'Sin días configurados'
+  if (d.length === 7) return 'Todos los días'
+  if (d.length === 5 && [1, 2, 3, 4, 5].every((v) => d.includes(v))) return 'Lunes a Viernes'
+  if (d.length === 6 && [1, 2, 3, 4, 5, 6].every((v) => d.includes(v))) return 'Lunes a Sábado'
+  return d.map((id) => WEEKDAY_NAMES[id] || id).join(', ')
+})
 
 function onCardClick() {
   if (!props.navigateOnSelect) return
@@ -240,6 +294,9 @@ const tasks = useTasksStore()
 const timer = useTimerStore()
 const confirmDelete = ref(false)
 const removing = ref(false)
+const showScopeModal = ref(false)
+const scopeAction = ref('edit')
+const pendingTitleEdit = ref('')
 const titleDraft = ref(props.task.title || '')
 const titleFocused = ref(false)
 const tagQuery = ref('')
@@ -301,7 +358,54 @@ async function saveTitle() {
     return
   }
   if (title === props.task.title) return
+
+  if (props.task.routine_id) {
+    pendingTitleEdit.value = title
+    scopeAction.value = 'edit'
+    showScopeModal.value = true
+    return
+  }
+
   await tasks.update(props.task.id, { title })
+}
+
+function handleDeleteClick() {
+  if (props.task.is_routine_template) {
+    confirmDelete.value = true
+  } else if (props.task.routine_id) {
+    scopeAction.value = 'delete'
+    showScopeModal.value = true
+  } else {
+    confirmDelete.value = true
+  }
+}
+
+async function onRoutineScopeSelect(scope) {
+  if (scopeAction.value === 'delete') {
+    if (removing.value) return
+    removing.value = true
+    try {
+      await tasks.remove(props.task.id, { scope })
+    } finally {
+      removing.value = false
+    }
+  } else if (scopeAction.value === 'edit') {
+    if (pendingTitleEdit.value) {
+      await tasks.update(
+        props.task.id,
+        { title: pendingTitleEdit.value },
+        { scope }
+      )
+      pendingTitleEdit.value = ''
+    }
+  }
+}
+
+function onRoutineScopeCancel() {
+  if (scopeAction.value === 'edit') {
+    titleDraft.value = props.task.title || ''
+    pendingTitleEdit.value = ''
+  }
 }
 
 async function openDatePicker() {

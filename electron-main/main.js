@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, net, nativeImage } = require('electron')
+const { app, BrowserWindow, protocol, net, nativeImage, session } = require('electron')
 const path = require('path')
 const { pathToFileURL } = require('url')
 const { runMigrations } = require('./db/migrations')
@@ -76,6 +76,22 @@ app.whenReady().then(() => {
     }
     return net.fetch(pathToFileURL(filePath).href)
   })
+
+  if (session && session.defaultSession) {
+    session.defaultSession.webRequest.onHeadersReceived(
+      { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.spotify.com/*'] },
+      (details, callback) => {
+        const responseHeaders = { ...details.responseHeaders }
+        for (const key of Object.keys(responseHeaders)) {
+          const lower = key.toLowerCase()
+          if (lower === 'x-frame-options' || lower === 'frame-options') {
+            delete responseHeaders[key]
+          }
+        }
+        callback({ responseHeaders })
+      }
+    )
+  }
 
   runMigrations()
   runSeed()
