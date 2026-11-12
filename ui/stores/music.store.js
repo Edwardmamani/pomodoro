@@ -220,7 +220,9 @@ export const useMusicStore = defineStore('music', () => {
       },
       onError: (err) => {
         console.warn('Error en YouTube Engine:', err)
+        isPlaying.value = false
         isBuffering.value = false
+        stopProgressTracking()
       }
     })
 

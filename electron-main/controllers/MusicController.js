@@ -1,8 +1,13 @@
 const { shell } = require('electron')
+const { execFile } = require('child_process')
+const fs = require('fs')
 const http = require('http')
 const https = require('https')
+const os = require('os')
+const path = require('path')
 const PlaylistModel = require('../models/PlaylistModel')
 const SettingsModel = require('../models/SettingsModel')
+const vlcAudio = require('../services/VlcAudioService')
 
 const titleCache = new Map()
 const playlistCache = new Map()
@@ -10,6 +15,7 @@ const streamCache = new Map()
 
 const STREAM_TTL_MS = 25 * 60 * 1000 // 25 minutos
 const SLICE_SIZE = 512 * 1024 // 512 KB por bloque para googlevideo.com
+const httpsKeepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 6 })
 const IOS_USER_AGENT =
   'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)'
 const DESKTOP_USER_AGENT =
@@ -17,6 +23,36 @@ const DESKTOP_USER_AGENT =
 
 let proxyServer = null
 let proxyPort = 0
+
+function findYtDlpBinary() {
+  const candidates = [
+    path.join(os.homedir(), '.local/bin/yt-dlp'),
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    path.resolve(__dirname, '../../../youtube-api-v3/venv/bin/yt-dlp')
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+  return 'yt-dlp'
+}
+
+function runYtDlpJson(args) {
+  const bin = findYtDlpBinary()
+  return new Promise((resolve) => {
+    execFile(bin, args, { timeout: 15000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err || !stdout) {
+        resolve(null)
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout))
+      } catch {
+        resolve(null)
+      }
+    })
+  })
+}
 
 function extractPlaylistId(input) {
   if (!input) return ''
@@ -43,6 +79,7 @@ function fetchRangeSlice(streamUrl, sliceStart, sliceEnd, redirects = 0) {
     const req = https.get(
       streamUrl,
       {
+        agent: httpsKeepAliveAgent,
         headers: {
           'User-Agent': IOS_USER_AGENT,
           Range: `bytes=${sliceStart}-${sliceEnd}`
@@ -68,7 +105,7 @@ function fetchRangeSlice(streamUrl, sliceStart, sliceEnd, redirects = 0) {
       }
     )
     req.on('error', reject)
-    req.setTimeout(8000, () => {
+    req.setTimeout(15000, () => {
       req.destroy()
       reject(new Error('SLICE_TIMEOUT'))
     })
@@ -76,10 +113,36 @@ function fetchRangeSlice(streamUrl, sliceStart, sliceEnd, redirects = 0) {
 }
 
 async function streamVideoToClient(info, req, clientRes) {
-  const totalLength = Number(info.contentLength) || 0
-  if (!totalLength || !info.remoteUrl) {
+  if (!info.remoteUrl) {
     clientRes.writeHead(404)
     clientRes.end()
+    return
+  }
+
+  const totalLength = Number(info.contentLength) || 0
+  if (!totalLength) {
+    const upReq = https.get(
+      info.remoteUrl,
+      { headers: { 'User-Agent': info.userAgent || IOS_USER_AGENT } },
+      (upRes) => {
+        clientRes.writeHead(upRes.statusCode || 200, {
+          'Content-Type': info.mimeType || upRes.headers['content-type'] || 'audio/webm',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache'
+        })
+        if (req.method === 'HEAD') {
+          upRes.resume()
+          clientRes.end()
+          return
+        }
+        upRes.pipe(clientRes)
+      }
+    )
+    upReq.on('error', () => {
+      if (!clientRes.headersSent) clientRes.writeHead(502)
+      clientRes.end()
+    })
+    req.on('close', () => upReq.destroy())
     return
   }
 
@@ -122,20 +185,52 @@ async function streamVideoToClient(info, req, clientRes) {
     aborted = true
   })
 
-  while (cursor <= end && !aborted && !clientRes.destroyed) {
+  const fetchSliceWithRetry = async (sStart, sEnd) => {
+    let lastErr
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (aborted || clientRes.destroyed) throw new Error('ABORTED')
+      try {
+        return await fetchRangeSlice(info.remoteUrl, sStart, sEnd)
+      } catch (err) {
+        lastErr = err
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)))
+      }
+    }
+    throw lastErr
+  }
+
+  // Pipelining: pre-solicitar el siguiente bloque de 512 KB mientras se transmite el actual
+  let nextPromise =
+    cursor <= end
+      ? fetchSliceWithRetry(cursor, Math.min(cursor + SLICE_SIZE - 1, end))
+      : null
+
+  while (cursor <= end && !aborted && !clientRes.destroyed && nextPromise) {
     const sliceEnd = Math.min(cursor + SLICE_SIZE - 1, end)
+    const nextStart = sliceEnd + 1
+    const upcomingPromise =
+      nextStart <= end
+        ? fetchSliceWithRetry(nextStart, Math.min(nextStart + SLICE_SIZE - 1, end))
+        : null
+    if (upcomingPromise) upcomingPromise.catch(() => {})
+
     try {
-      const upRes = await fetchRangeSlice(info.remoteUrl, cursor, sliceEnd)
+      const upRes = await nextPromise
       await new Promise((resolve, reject) => {
         upRes.on('data', (chunk) => {
           if (!aborted && !clientRes.destroyed) {
-            clientRes.write(chunk)
+            const ok = clientRes.write(chunk)
+            if (!ok) {
+              upRes.pause()
+              clientRes.once('drain', () => upRes.resume())
+            }
           }
         })
         upRes.on('end', resolve)
         upRes.on('error', reject)
       })
-      cursor = sliceEnd + 1
+      cursor = nextStart
+      nextPromise = upcomingPromise
     } catch {
       break
     }
@@ -370,6 +465,37 @@ class MusicController {
       }
     }
 
+    // 1. Priorizar yt-dlp (igual que youtube-api-v3) para obtener stream directo continuo sin cortes 403
+    const ytdlpInfo = await runYtDlpJson([
+      '-f',
+      'bestaudio[ext=webm]/bestaudio[acodec=opus]/bestaudio/best',
+      '--js-runtimes',
+      'node',
+      '-j',
+      '--no-playlist',
+      `https://www.youtube.com/watch?v=${cleanId}`
+    ])
+
+    if (ytdlpInfo && ytdlpInfo.url) {
+      const payload = {
+        videoId: cleanId,
+        url: `http://127.0.0.1:${port}/stream?id=${encodeURIComponent(cleanId)}`,
+        directUrl: ytdlpInfo.url,
+        remoteUrl: ytdlpInfo.url,
+        contentLength: Number(ytdlpInfo.filesize || ytdlpInfo.filesize_approx || 0),
+        mimeType: ytdlpInfo.ext === 'webm' ? 'audio/webm; codecs="opus"' : 'audio/mp4',
+        userAgent: ytdlpInfo.http_headers?.['User-Agent'] || DESKTOP_USER_AGENT,
+        bitrate: Math.round((ytdlpInfo.abr || 128) * 1000),
+        title: ytdlpInfo.title || titleCache.get(cleanId)?.title || `Pista ${cleanId}`,
+        author: ytdlpInfo.uploader || titleCache.get(cleanId)?.author || '',
+        duration: Number(ytdlpInfo.duration) || 0,
+        thumbnailUrl: ytdlpInfo.thumbnail || `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`
+      }
+      streamCache.set(cleanId, { timestamp: Date.now(), data: payload })
+      return { ok: true, data: payload }
+    }
+
+    // 2. Fallback a InnerTube IOS si yt-dlp no está disponible o falla
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         videoId: cleanId,
@@ -416,7 +542,6 @@ class MusicController {
               const audioFormats = adaptive.filter(
                 (f) => f.mimeType && f.mimeType.startsWith('audio/') && f.url
               )
-              // Preferir audio/webm (Opus) soportado nativamente por libffmpeg de Electron
               const webmAudio = audioFormats
                 .filter((f) => f.mimeType.includes('audio/webm'))
                 .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
@@ -515,6 +640,55 @@ class MusicController {
       )
     )
     return { ok: true, data: results }
+  }
+
+  async vlcPlay(_event, videoId) {
+    const streamRes = await this.getAudioStream(null, videoId)
+    if (!streamRes.ok || (!streamRes.data?.directUrl && !streamRes.data?.url)) {
+      return streamRes
+    }
+    const playUrl = streamRes.data.directUrl || streamRes.data.url
+    vlcAudio.playStream(playUrl, videoId, streamRes.data.duration || 0)
+    return {
+      ok: true,
+      data: {
+        videoId: streamRes.data.videoId,
+        title: streamRes.data.title,
+        author: streamRes.data.author,
+        duration: streamRes.data.duration,
+        thumbnailUrl: streamRes.data.thumbnailUrl
+      }
+    }
+  }
+
+  vlcPause() {
+    vlcAudio.pause()
+    return { ok: true, data: { playing: false } }
+  }
+
+  vlcResume() {
+    vlcAudio.play()
+    return { ok: true, data: { playing: true } }
+  }
+
+  vlcStop() {
+    vlcAudio.stop()
+    return { ok: true }
+  }
+
+  vlcSeek(_event, seconds) {
+    vlcAudio.seek(seconds)
+    return { ok: true, data: { time: Number(seconds) || 0 } }
+  }
+
+  vlcSetVolume(_event, level) {
+    const vol = vlcAudio.setVolume(level)
+    return { ok: true, data: { volume: vol } }
+  }
+
+  async vlcGetStatus() {
+    const status = await vlcAudio.getStatus()
+    return { ok: true, data: status }
   }
 
   activePlaylist() {

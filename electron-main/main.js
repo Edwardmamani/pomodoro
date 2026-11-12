@@ -142,5 +142,10 @@ app.on('before-quit', () => {
   } catch (err) {
     console.error('No se pudo persistir el timer al salir:', err)
   }
+  try {
+    require('./services/VlcAudioService').destroy()
+  } catch {
+    /* ignore */
+  }
   closeConnection()
 })

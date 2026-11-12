@@ -18,5 +18,12 @@ router.handle('pomodoro:music:fetchPlaylistTracks', (e, playlistId) =>
 router.handle('pomodoro:music:getAudioStream', (e, videoId) =>
   music.getAudioStream(e, videoId)
 )
+router.handle('pomodoro:music:vlcPlay', (e, videoId) => music.vlcPlay(e, videoId))
+router.handle('pomodoro:music:vlcPause', (e) => music.vlcPause(e))
+router.handle('pomodoro:music:vlcResume', (e) => music.vlcResume(e))
+router.handle('pomodoro:music:vlcStop', (e) => music.vlcStop(e))
+router.handle('pomodoro:music:vlcSeek', (e, seconds) => music.vlcSeek(e, seconds))
+router.handle('pomodoro:music:vlcSetVolume', (e, level) => music.vlcSetVolume(e, level))
+router.handle('pomodoro:music:vlcGetStatus', (e) => music.vlcGetStatus(e))
 
 module.exports = router

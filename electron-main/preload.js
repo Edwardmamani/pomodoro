@@ -59,7 +59,14 @@ contextBridge.exposeInMainWorld('pomodoroAPI', {
     fetchTrackTitles: (ids) => invoke('pomodoro:music:fetchTrackTitles', ids),
     fetchPlaylistTracks: (playlistId) =>
       invoke('pomodoro:music:fetchPlaylistTracks', playlistId),
-    getAudioStream: (videoId) => invoke('pomodoro:music:getAudioStream', videoId)
+    getAudioStream: (videoId) => invoke('pomodoro:music:getAudioStream', videoId),
+    vlcPlay: (videoId) => invoke('pomodoro:music:vlcPlay', videoId),
+    vlcPause: () => invoke('pomodoro:music:vlcPause'),
+    vlcResume: () => invoke('pomodoro:music:vlcResume'),
+    vlcStop: () => invoke('pomodoro:music:vlcStop'),
+    vlcSeek: (seconds) => invoke('pomodoro:music:vlcSeek', seconds),
+    vlcSetVolume: (level) => invoke('pomodoro:music:vlcSetVolume', level),
+    vlcGetStatus: () => invoke('pomodoro:music:vlcGetStatus')
   },
   sound: {
     onPlay: (cb) => {
