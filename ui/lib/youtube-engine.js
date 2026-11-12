@@ -8,8 +8,13 @@ export function loadYouTubeIFrameAPI() {
   if (apiPromise) return apiPromise
 
   apiPromise = new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
+    if (typeof window !== 'undefined' && window.YT && window.YT.Player) {
       resolve(window.YT)
+      return
+    }
+
+    if (typeof window === 'undefined') {
+      resolve(null)
       return
     }
 
@@ -18,6 +23,14 @@ export function loadYouTubeIFrameAPI() {
       if (typeof prevOnReady === 'function') prevOnReady()
       resolve(window.YT)
     }
+
+    // Polling de respaldo por si el evento onReady ocurrió antes del hook
+    const checkInterval = setInterval(() => {
+      if (window.YT && window.YT.Player) {
+        clearInterval(checkInterval)
+        resolve(window.YT)
+      }
+    }, 150)
 
     const script = document.createElement('script')
     script.id = 'youtube-iframe-api-loader'
@@ -40,6 +53,12 @@ export class YouTubeEngine {
 
   async init() {
     const YT = await loadYouTubeIFrameAPI()
+    if (!YT || !YT.Player) return this
+
+    const validOrigin =
+      typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')
+        ? window.location.origin
+        : 'https://www.youtube.com'
 
     return new Promise((resolve) => {
       this.player = new YT.Player(this.containerId, {
@@ -54,7 +73,7 @@ export class YouTubeEngine {
           modestbranding: 1,
           iv_load_policy: 3,
           enablejsapi: 1,
-          origin: window.location.origin
+          origin: validOrigin
         },
         events: {
           onReady: (event) => {
@@ -89,13 +108,27 @@ export class YouTubeEngine {
 
     try {
       if (parsed.playlistId) {
+        const playlistObj = {
+          list: parsed.playlistId,
+          listType: 'playlist',
+          index: 0,
+          startSeconds: 0
+        }
         if (autoplay) {
           if (typeof this.player.loadPlaylist === 'function') {
-            this.player.loadPlaylist(parsed.playlistId, 0, 0)
+            try {
+              this.player.loadPlaylist(playlistObj)
+            } catch {
+              this.player.loadPlaylist(parsed.playlistId, 0, 0)
+            }
           }
         } else {
           if (typeof this.player.cuePlaylist === 'function') {
-            this.player.cuePlaylist(parsed.playlistId, 0, 0)
+            try {
+              this.player.cuePlaylist(playlistObj)
+            } catch {
+              this.player.cuePlaylist(parsed.playlistId, 0, 0)
+            }
           }
         }
       } else if (parsed.videoId) {
@@ -121,9 +154,15 @@ export class YouTubeEngine {
   }
 
   play() {
-    if (this.isReady && this.player && typeof this.player.playVideo === 'function') {
+    if (this.isReady && this.player) {
       try {
-        this.player.playVideo()
+        if (typeof this.player.playVideo === 'function') {
+          this.player.playVideo()
+        }
+        const list = this.getPlaylist()
+        if (list.length > 0 && typeof this.player.playVideoAt === 'function' && this.getPlaylistIndex() < 0) {
+          this.player.playVideoAt(0)
+        }
       } catch (err) {
         console.warn('[YouTubeEngine] Error en play:', err)
       }

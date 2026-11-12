@@ -277,7 +277,15 @@ export const useMusicStore = defineStore('music', () => {
   function play() {
     if (currentService.value === 'youtube') {
       if (ytEngine) {
-        ytEngine.play()
+        const playlist = ytEngine.getPlaylist()
+        // Si no hay lista en curso o aún no arrancó la reproducción, cargar parsedMedia activamente
+        if ((!playlist || playlist.length === 0) && parsedMedia.value) {
+          ytEngine.load(parsedMedia.value, true)
+        } else {
+          ytEngine.play()
+        }
+        isPlaying.value = true
+        startProgressTracking()
       }
     } else {
       isPlaying.value = true

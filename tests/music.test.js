@@ -82,9 +82,16 @@ class MockYouTubePlayer {
     }
   }
 
-  loadPlaylist(playlistId, index = 0, startSeconds = 0) {
-    this.playlistId = playlistId
-    this.currentIndex = index
+  loadPlaylist(playlistParam, index = 0, startSeconds = 0) {
+    const listId =
+      typeof playlistParam === 'object' && playlistParam !== null ? playlistParam.list : playlistParam
+    const targetIdx =
+      typeof playlistParam === 'object' && playlistParam !== null && typeof playlistParam.index === 'number'
+        ? playlistParam.index
+        : index
+
+    this.playlistId = listId
+    this.currentIndex = targetIdx
     this.currentTime = startSeconds
     // Simular lista de canciones obtenidas de la playlist
     this.currentPlaylist = [
@@ -93,8 +100,8 @@ class MockYouTubePlayer {
       'PLRrXghsZBv6c_track_3'
     ]
     this.videoData = {
-      video_id: this.currentPlaylist[index],
-      title: `Canción de demostración ${index + 1}`,
+      video_id: this.currentPlaylist[targetIdx] || this.currentPlaylist[0],
+      title: `Canción de demostración ${targetIdx + 1}`,
       author: 'Artista YouTube Music'
     }
     this.state = 1 // PLAYING
@@ -103,8 +110,8 @@ class MockYouTubePlayer {
     }
   }
 
-  cuePlaylist(playlistId, index = 0, startSeconds = 0) {
-    this.loadPlaylist(playlistId, index, startSeconds)
+  cuePlaylist(playlistParam, index = 0, startSeconds = 0) {
+    this.loadPlaylist(playlistParam, index, startSeconds)
     this.state = 5 // CUED
     if (typeof this.events.onStateChange === 'function') {
       this.events.onStateChange({ data: this.state })

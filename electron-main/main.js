@@ -11,6 +11,9 @@ const NoteModel = require('./models/NoteModel')
 const isDev = process.env.ELECTRON_DEV === '1'
 const APP_ICON = path.join(__dirname, '..', 'assets', 'icon.png')
 
+// Permitir reproducción de audio en segundo plano sin requerir gesto previo del usuario en iframes
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
 app.setName('Pomodoro Serene Focus')
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.edwardmamani.pomodoro')
@@ -78,6 +81,16 @@ app.whenReady().then(() => {
   })
 
   if (session && session.defaultSession) {
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'] },
+      (details, callback) => {
+        const requestHeaders = { ...details.requestHeaders }
+        requestHeaders['Referer'] = 'https://www.youtube.com/'
+        requestHeaders['Origin'] = 'https://www.youtube.com'
+        callback({ requestHeaders })
+      }
+    )
+
     session.defaultSession.webRequest.onHeadersReceived(
       { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.spotify.com/*'] },
       (details, callback) => {

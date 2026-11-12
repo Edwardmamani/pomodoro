@@ -2,17 +2,13 @@
   <footer
     class="relative bg-surface-container-lowest border-t border-outline-variant/30 px-6 py-2.5 flex items-center justify-between text-on-surface shadow-xl z-20"
   >
-    <!-- Contenedor oculto del reproductor de YouTube -->
+    <!-- Contenedor del reproductor de YouTube (visible en mini-player o ubicado offscreen para reproducción en segundo plano) -->
     <div
-      class="fixed pointer-events-none opacity-0 -z-50 overflow-hidden"
-      :class="{
-        '!static !pointer-events-auto !opacity-100 !z-30': music.showMiniPlayer && music.currentService === 'youtube'
-      }"
-      style="width: 1px; height: 1px"
+      class="overflow-hidden transition-all duration-300"
       :style="
         music.showMiniPlayer && music.currentService === 'youtube'
-          ? 'position: fixed; bottom: 65px; left: 24px; width: 340px; height: 195px; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); background: #000;'
-          : ''
+          ? 'position: fixed; bottom: 65px; left: 24px; width: 340px; height: 195px; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); background: #000; z-index: 50; opacity: 1; pointer-events: auto;'
+          : 'position: fixed; top: -9999px; left: -9999px; width: 340px; height: 195px; opacity: 0.01; pointer-events: none; z-index: -50;'
       "
     >
       <div v-if="music.showMiniPlayer && music.currentService === 'youtube'" class="absolute top-2 right-2 z-40">
