@@ -79,7 +79,6 @@ export class YouTubeEngine {
       this.useNativeAudio = true
       this.audio = typeof Audio !== 'undefined' ? new Audio() : this._createMockAudio()
       this.audio.preload = 'auto'
-      this.audio.crossOrigin = 'anonymous'
 
       const self = this
       this.player = {

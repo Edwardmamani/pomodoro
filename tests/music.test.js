@@ -463,18 +463,19 @@ describe('Reproductor de Música - Pruebas Unitarias', () => {
       assert.ok(firstTrack.duration > 0, 'La duración debe ser mayor a 0 segundos')
     })
 
-    test('4.2 Debe obtener el stream de audio directo (audio/mp4) reproducible para canciones de la lista', async () => {
-      // Probar tanto la primera pista ('Y7iJgvjcg_4') como 'xDo--w1yg1M' (que antes fallaba en iframe embed)
+    test('4.2 Debe obtener el stream de audio directo (audio/webm Opus) reproducible para canciones de la lista', async () => {
+      // Probar tanto la primera pista ('Y7iJgvjcg_4') como 'xDo--w1yg1M' y 'GSbRWqsjmwI'
       const stream1 = await musicController.getAudioStream(null, 'Y7iJgvjcg_4')
       assert.strictEqual(stream1.ok, true, 'getAudioStream debe responder ok: true para Y7iJgvjcg_4')
-      assert.ok(stream1.data.url.startsWith('https://'), 'Debe retornar una URL HTTPS de stream válida')
-      assert.ok(stream1.data.mimeType.startsWith('audio/'), 'El mimeType debe ser de audio')
+      assert.ok(stream1.data.url.startsWith('http://127.0.0.1:'), 'Debe retornar la URL del proxy local de streaming')
+      assert.ok(stream1.data.remoteUrl.startsWith('https://'), 'Debe retornar una URL remota HTTPS válida')
+      assert.ok(stream1.data.mimeType.includes('audio/webm'), 'El mimeType debe ser audio/webm (Opus)')
       assert.strictEqual(stream1.data.title, 'A Veces')
 
-      const stream2 = await musicController.getAudioStream(null, 'xDo--w1yg1M')
-      assert.strictEqual(stream2.ok, true, 'getAudioStream debe responder ok: true para xDo--w1yg1M')
-      assert.ok(stream2.data.url.startsWith('https://'), 'Debe retornar una URL HTTPS de stream válida')
-      assert.strictEqual(stream2.data.title, 'Querer Querernos')
+      const stream2 = await musicController.getAudioStream(null, 'GSbRWqsjmwI')
+      assert.strictEqual(stream2.ok, true, 'getAudioStream debe responder ok: true para GSbRWqsjmwI')
+      assert.ok(stream2.data.url.startsWith('http://127.0.0.1:'), 'Debe retornar la URL del proxy local de streaming')
+      assert.strictEqual(stream2.data.title, 'Bajo El Agua')
     })
   })
 })

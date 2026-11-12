@@ -1,4 +1,5 @@
 const { shell } = require('electron')
+const http = require('http')
 const https = require('https')
 const PlaylistModel = require('../models/PlaylistModel')
 const SettingsModel = require('../models/SettingsModel')
@@ -8,10 +9,14 @@ const playlistCache = new Map()
 const streamCache = new Map()
 
 const STREAM_TTL_MS = 25 * 60 * 1000 // 25 minutos
+const SLICE_SIZE = 512 * 1024 // 512 KB por bloque para googlevideo.com
 const IOS_USER_AGENT =
   'com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)'
 const DESKTOP_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
+let proxyServer = null
+let proxyPort = 0
 
 function extractPlaylistId(input) {
   if (!input) return ''
@@ -29,10 +34,158 @@ function extractPlaylistId(input) {
   return str.split('&')[0].trim()
 }
 
+function fetchRangeSlice(streamUrl, sliceStart, sliceEnd, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 5) {
+      reject(new Error('TOO_MANY_REDIRECTS'))
+      return
+    }
+    const req = https.get(
+      streamUrl,
+      {
+        headers: {
+          'User-Agent': IOS_USER_AGENT,
+          Range: `bytes=${sliceStart}-${sliceEnd}`
+        }
+      },
+      (res) => {
+        if (
+          [301, 302, 303, 307, 308].includes(res.statusCode) &&
+          res.headers.location
+        ) {
+          res.resume()
+          fetchRangeSlice(res.headers.location, sliceStart, sliceEnd, redirects + 1)
+            .then(resolve)
+            .catch(reject)
+          return
+        }
+        if (res.statusCode !== 200 && res.statusCode !== 206) {
+          res.resume()
+          reject(new Error(`UPSTREAM_HTTP_${res.statusCode}`))
+          return
+        }
+        resolve(res)
+      }
+    )
+    req.on('error', reject)
+    req.setTimeout(8000, () => {
+      req.destroy()
+      reject(new Error('SLICE_TIMEOUT'))
+    })
+  })
+}
+
+async function streamVideoToClient(info, req, clientRes) {
+  const totalLength = Number(info.contentLength) || 0
+  if (!totalLength || !info.remoteUrl) {
+    clientRes.writeHead(404)
+    clientRes.end()
+    return
+  }
+
+  let start = 0
+  let end = totalLength - 1
+
+  if (req.headers.range) {
+    const match = req.headers.range.match(/bytes=(\d+)-(\d*)/)
+    if (match) {
+      start = parseInt(match[1], 10)
+      if (match[2]) {
+        end = Math.min(parseInt(match[2], 10), totalLength - 1)
+      }
+    }
+  }
+
+  if (start >= totalLength || start > end) {
+    clientRes.writeHead(416, { 'Content-Range': `bytes */${totalLength}` })
+    clientRes.end()
+    return
+  }
+
+  clientRes.writeHead(req.headers.range ? 206 : 200, {
+    'Content-Type': info.mimeType || 'audio/webm',
+    'Accept-Ranges': 'bytes',
+    'Content-Range': `bytes ${start}-${end}/${totalLength}`,
+    'Content-Length': String(end - start + 1),
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-cache'
+  })
+
+  if (req.method === 'HEAD') {
+    clientRes.end()
+    return
+  }
+
+  let cursor = start
+  let aborted = false
+  req.on('close', () => {
+    aborted = true
+  })
+
+  while (cursor <= end && !aborted && !clientRes.destroyed) {
+    const sliceEnd = Math.min(cursor + SLICE_SIZE - 1, end)
+    try {
+      const upRes = await fetchRangeSlice(info.remoteUrl, cursor, sliceEnd)
+      await new Promise((resolve, reject) => {
+        upRes.on('data', (chunk) => {
+          if (!aborted && !clientRes.destroyed) {
+            clientRes.write(chunk)
+          }
+        })
+        upRes.on('end', resolve)
+        upRes.on('error', reject)
+      })
+      cursor = sliceEnd + 1
+    } catch {
+      break
+    }
+  }
+
+  if (!clientRes.destroyed) {
+    clientRes.end()
+  }
+}
+
 class MusicController {
   constructor() {
     this.playlists = new PlaylistModel()
     this.settings = new SettingsModel()
+  }
+
+  async ensureProxyServer() {
+    if (proxyServer && proxyPort > 0) return proxyPort
+
+    return new Promise((resolve) => {
+      proxyServer = http.createServer(async (req, clientRes) => {
+        try {
+          const parsedUrl = new URL(req.url, 'http://127.0.0.1')
+          const videoId = parsedUrl.searchParams.get('id')
+          if (!videoId) {
+            clientRes.writeHead(400)
+            clientRes.end()
+            return
+          }
+          const streamRes = await this.getAudioStream(null, videoId)
+          if (!streamRes.ok || !streamRes.data) {
+            clientRes.writeHead(404)
+            clientRes.end()
+            return
+          }
+          await streamVideoToClient(streamRes.data, req, clientRes)
+        } catch {
+          if (!clientRes.headersSent) clientRes.writeHead(500)
+          clientRes.end()
+        }
+      })
+
+      // No bloquear el cierre del proceso de Node en pruebas unitarias
+      proxyServer.unref()
+
+      proxyServer.listen(0, '127.0.0.1', () => {
+        proxyPort = proxyServer.address().port
+        resolve(proxyPort)
+      })
+    })
   }
 
   list() {
@@ -202,10 +355,18 @@ class MusicController {
     const cleanId = String(videoId || '').trim()
     if (!cleanId) return { ok: false, error: 'INVALID_VIDEO_ID' }
 
+    const port = await this.ensureProxyServer()
+
     if (streamCache.has(cleanId)) {
       const cached = streamCache.get(cleanId)
       if (Date.now() - cached.timestamp < STREAM_TTL_MS) {
-        return { ok: true, data: cached.data }
+        return {
+          ok: true,
+          data: {
+            ...cached.data,
+            url: `http://127.0.0.1:${port}/stream?id=${encodeURIComponent(cleanId)}`
+          }
+        }
       }
     }
 
@@ -255,12 +416,12 @@ class MusicController {
               const audioFormats = adaptive.filter(
                 (f) => f.mimeType && f.mimeType.startsWith('audio/') && f.url
               )
-              // Preferir audio/mp4 (AAC) con mayor bitrate para máxima compatibilidad en HTML5 Audio
-              const mp4Audio = audioFormats
-                .filter((f) => f.mimeType.includes('audio/mp4'))
+              // Preferir audio/webm (Opus) soportado nativamente por libffmpeg de Electron
+              const webmAudio = audioFormats
+                .filter((f) => f.mimeType.includes('audio/webm'))
                 .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
               const best =
-                mp4Audio[0] ||
+                webmAudio[0] ||
                 audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0]
 
               if (!best || !best.url) {
@@ -271,12 +432,17 @@ class MusicController {
               const details = json.videoDetails || {}
               const payload = {
                 videoId: cleanId,
-                url: best.url,
+                url: `http://127.0.0.1:${port}/stream?id=${encodeURIComponent(cleanId)}`,
+                remoteUrl: best.url,
+                contentLength: Number(best.contentLength) || 0,
                 mimeType: best.mimeType,
                 bitrate: best.bitrate || 128000,
                 title: details.title || titleCache.get(cleanId)?.title || `Pista ${cleanId}`,
                 author: details.author || titleCache.get(cleanId)?.author || '',
-                duration: Number(details.lengthSeconds) || Math.round(Number(best.approxDurationMs || 0) / 1000) || 0,
+                duration:
+                  Number(details.lengthSeconds) ||
+                  Math.round(Number(best.approxDurationMs || 0) / 1000) ||
+                  0,
                 thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`
               }
 
