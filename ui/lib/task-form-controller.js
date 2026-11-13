@@ -40,9 +40,10 @@ export class TaskFormController {
     return PriorityScoreHelper.calculate(form)
   }
 
-  static async hydrate(form, editTask, tasksStore) {
+  static async hydrate(form, editTask, tasksStore, defaultDueDate = '') {
     if (!editTask) {
       Object.assign(form, TaskFormController.createDefaults())
+      if (defaultDueDate) form.due_date = defaultDueDate
       return []
     }
     form.title = editTask.title || ''

@@ -55,7 +55,10 @@ import TaskPriorityVectorFields from '@/components/task/TaskPriorityVectorFields
 import TaskRoutineSection from '@/components/task/TaskRoutineSection.vue'
 import TaskTagChipsInput from '@/components/task/TaskTagChipsInput.vue'
 
-const props = defineProps({ editTask: { type: Object, default: null } })
+const props = defineProps({
+  editTask: { type: Object, default: null },
+  defaultDueDate: { type: String, default: '' }
+})
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['created', 'updated'])
 
@@ -95,7 +98,7 @@ async function submit() {
 
 watch(open, async (v) => {
   if (!v) return
-  selectedTags.value = await TaskFormController.hydrate(form, props.editTask, tasks)
+  selectedTags.value = await TaskFormController.hydrate(form, props.editTask, tasks, props.defaultDueDate)
   tagsRef.value?.reset()
   const res = await window.pomodoroAPI.tasks.listTags()
   if (res?.ok) knownTags.value = res.data || []

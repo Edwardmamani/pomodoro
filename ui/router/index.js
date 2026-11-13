@@ -10,6 +10,11 @@ const router = createRouter({
       meta: { panel: 'tasks' }
     },
     {
+      path: '/calendario',
+      component: AppShell,
+      meta: { panel: 'calendar' }
+    },
+    {
       path: '/tarea/:taskId',
       component: AppShell,
       meta: { panel: 'task-edit' }

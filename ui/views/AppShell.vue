@@ -21,6 +21,7 @@
 
       <div class="min-h-0 flex-shrink-0 overflow-hidden" :style="{ width: `${sidebarWidth}px` }">
         <TaskPanel v-if="panel === 'tasks'" />
+        <CalendarPanel v-else-if="panel === 'calendar'" />
         <TaskEditMarkDownPanel v-else-if="panel === 'task-edit'" :task-id="route.params.taskId" />
         <SettingsPanel v-else />
       </div>
@@ -36,6 +37,7 @@ import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import TimerStage from '@/components/TimerStage.vue'
 import TaskPanel from '@/components/panel/TaskPanel.vue'
+import CalendarPanel from '@/components/panel/CalendarPanel.vue'
 import TaskEditMarkDownPanel from '@/components/panel/TaskEditMarkDownPanel.vue'
 import SettingsPanel from '@/components/panel/SettingsPanel.vue'
 import MusicFooter from '@/components/MusicFooter.vue'

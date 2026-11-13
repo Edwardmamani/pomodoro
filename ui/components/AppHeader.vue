@@ -12,7 +12,9 @@
         <span class="font-headline-md text-white tracking-tight text-[15px]"
           >Focus</span
         >
-        <span class="font-label-mono-sm text-on-surface-variant text-[10.5px] px-2 py-0.5 rounded-md bg-white/5 border border-white/5">Cronómetro</span>
+        <span class="font-label-mono-sm text-on-surface-variant text-[10.5px] px-2 py-0.5 rounded-md bg-white/5 border border-white/5">
+          {{ panel === 'calendar' ? 'Calendario' : panel === 'settings' ? 'Configuración' : 'Cronómetro' }}
+        </span>
       </div>
     </div>
     <div
@@ -39,6 +41,18 @@
           title="Tareas"
         >
           <span class="material-symbols-outlined text-[18px]">checklist</span>
+        </RouterLink>
+        <RouterLink
+          to="/calendario"
+          class="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+          :class="
+            panel === 'calendar'
+              ? 'bg-surface-container-high text-primary'
+              : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+          "
+          title="Calendario"
+        >
+          <span class="material-symbols-outlined text-[18px]">calendar_month</span>
         </RouterLink>
         <button
           type="button"
